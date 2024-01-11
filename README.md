@@ -1,2 +1,2 @@
-# cdbootstrap-operator
-Kubernetes operator that manages an bootstrap pipeline agent to initiate an outbound connection with the CI/CD environment.
+# example-rust-operator
+Kubernetes operator example in Rust with kube-rs.
