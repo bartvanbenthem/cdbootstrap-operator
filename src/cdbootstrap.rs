@@ -5,6 +5,8 @@ use kube::api::{DeleteParams, ObjectMeta, PostParams};
 use kube::{Api, Client, Error};
 use std::collections::BTreeMap;
 
+use crate::crd::CDBootstrap;
+
 /// Creates a new deployment of `n` pods with the `nginx:latest` docker image inside,
 /// where `n` is the number of `replicas` given.
 ///
@@ -18,8 +20,8 @@ use std::collections::BTreeMap;
 pub async fn deploy(
     client: Client,
     name: &str,
-    replicas: i32,
     namespace: &str,
+    cr: &CDBootstrap,
 ) -> Result<Deployment, Error> {
     let mut labels: BTreeMap<String, String> = BTreeMap::new();
     labels.insert("app".to_owned(), name.to_owned());
@@ -33,7 +35,7 @@ pub async fn deploy(
             ..ObjectMeta::default()
         },
         spec: Some(DeploymentSpec {
-            replicas: Some(replicas),
+            replicas: Some(cr.spec.replicas),
             selector: LabelSelector {
                 match_expressions: None,
                 match_labels: Some(labels.clone()),

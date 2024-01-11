@@ -35,8 +35,8 @@ async fn main() {
         .run(reconcile, on_error, context)
         .for_each(|reconciliation_result| async move {
             match reconciliation_result {
-                Ok(cdb_resource) => {
-                    println!("Reconciliation successful. Resource: {:?}", cdb_resource);
+                Ok(custom_resource) => {
+                    println!("Reconciliation successful. Resource: {:?}", custom_resource);
                 }
                 Err(reconciliation_err) => {
                     eprintln!("Reconciliation error: {:?}", reconciliation_err)
@@ -73,13 +73,13 @@ enum CDBootstrapAction {
     NoOp,
 }
 
-async fn reconcile(cdb: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Action, Error> {
+async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Action, Error> {
     let client: Client = context.client.clone(); // The `Client` is shared -> a clone from the reference is obtained
 
     // The resource of `CDBootstrap` kind is required to have a namespace set. However, it is not guaranteed
     // the resource will have a `namespace` set. Therefore, the `namespace` field on object's metadata
     // is optional and Rust forces the programmer to check for it's existence first.
-    let namespace: String = match cdb.namespace() {
+    let namespace: String = match cr.namespace() {
         None => {
             // If there is no namespace to deploy to defined, reconciliation ends with an error immediately.
             return Err(Error::UserInputError(
@@ -91,10 +91,10 @@ async fn reconcile(cdb: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<A
         // the namespace could be checked for existence first.
         Some(namespace) => namespace,
     };
-    let name = cdb.name_any(); // Name of the CDBootstrap resource is used to name the subresources as well.
+    let name = cr.name_any(); // Name of the CDBootstrap resource is used to name the subresources as well.
 
     // Performs action as decided by the `determine_action` function.
-    return match determine_action(&cdb) {
+    return match determine_action(&cr) {
         CDBootstrapAction::Create => {
             // Creates a deployment with `n` CDBootstrap service pods, but applies a finalizer first.
             // Finalizer is applied first, as the operator might be shut down and restarted
@@ -105,7 +105,7 @@ async fn reconcile(cdb: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<A
             // of `kube::Error` to the `Error` defined in this crate.
             finalizer::add(client.clone(), &name, &namespace).await?;
             // Invoke creation of a Kubernetes built-in resource named deployment with `n` CDBootstrap service pods.
-            cdbootstrap::deploy(client, &name, cdb.spec.replicas, &namespace).await?;
+            cdbootstrap::deploy(client, &name, &namespace, &cr).await?;
             Ok(Action::requeue(Duration::from_secs(10)))
         }
         CDBootstrapAction::Delete => {
@@ -134,10 +134,10 @@ async fn reconcile(cdb: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<A
 ///
 /// # Arguments
 /// - `cdbootstrap`: A reference to `CDBootstrap` being reconciled to decide next action upon.
-fn determine_action(cdb: &CDBootstrap) -> CDBootstrapAction {
-    return if cdb.meta().deletion_timestamp.is_some() {
+fn determine_action(cr: &CDBootstrap) -> CDBootstrapAction {
+    return if cr.meta().deletion_timestamp.is_some() {
         CDBootstrapAction::Delete
-    } else if cdb
+    } else if cr
         .meta()
         .finalizers
         .as_ref()
