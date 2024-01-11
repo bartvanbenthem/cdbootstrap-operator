@@ -5,4 +5,4 @@ metadata:
   name: test-bootstrap # Name of the "bootstrap" custom resource instance, may be changed to your liking
   namespace: default # Namespace must exist and account in KUBECONFIG must have sufficient permissions
 spec:
-  replicas: 1 # Number of "bootstrap" pods created.
+  replicas: 2 # Number of "bootstrap" pods created.
