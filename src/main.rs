@@ -2,15 +2,14 @@ use std::sync::Arc;
 
 use futures::stream::StreamExt;
 use kube::runtime::watcher::Config;
-use kube::Resource;
-use kube::ResourceExt;
 use kube::{client::Client, runtime::controller::Action, runtime::Controller, Api};
+use kube::{Resource, ResourceExt};
 use tokio::time::Duration;
 
 use crate::crd::CDBootstrap;
 
-pub mod crd;
 mod cdbootstrap;
+pub mod crd;
 mod finalizer;
 
 #[tokio::main]
@@ -157,8 +156,8 @@ fn determine_action(cr: &CDBootstrap) -> CDBootstrapAction {
 /// - `cdbootstrap`: The erroneous resource.
 /// - `error`: A reference to the `kube::Error` that occurred during reconciliation.
 /// - `_context`: Unused argument. Context Data "injected" automatically by kube-rs.
-fn on_error(cdb: Arc<CDBootstrap>, error: &Error, _context: Arc<ContextData>) -> Action {
-    eprintln!("Reconciliation error:\n{:?}.\n{:?}", error, cdb);
+fn on_error(cr: Arc<CDBootstrap>, error: &Error, _context: Arc<ContextData>) -> Action {
+    eprintln!("Reconciliation error:\n{:?}.\n{:?}", error, cr);
     Action::requeue(Duration::from_secs(5))
 }
 
