@@ -129,16 +129,7 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
             update_status(context.clone(), true).await?;
 
             ////////////////////////////////////////////////////////////////
-            let api: Api<CDBootstrap> = Api::default_namespaced(context.client.clone());
-            println!("Get Status on cdbootstrap instance test-bootstrap");
-            let o = api.get_status("test-bootstrap").await?;
-            println!("Got status {:?} for {}", &o.status, &o.name_any());
-            let o = api.get_metadata("test-bootstrap").await?;
-            println!(
-                "Got namespace {:?} for {}",
-                &o.metadata.namespace.clone().unwrap(),
-                &o.name_any()
-            );
+            get_status(context.clone()).await?;
             ////////////////////////////////////////////////////////////////
 
             Ok(Action::requeue(Duration::from_secs(10)))
@@ -176,7 +167,6 @@ fn determine_action(cr: &CDBootstrap) -> CDBootstrapAction {
 /// - `error`: A reference to the `kube::Error` that occurred during reconciliation.
 /// - `_context`: Unused argument. Context Data "injected" automatically by kube-rs.
 fn on_error(cr: Arc<CDBootstrap>, error: &Error, context: Arc<ContextData>) -> Action {
-
     // Clone the necessary data
     let context_clone = context.clone();
 
@@ -232,6 +222,23 @@ async fn update_status(context: Arc<ContextData>, success: bool) -> Result<(), E
     );
 
     //assert_eq!(cdb.status.unwrap().succeeded, true);
+
+    Ok(())
+}
+
+async fn get_status(context: Arc<ContextData>) -> Result<(), Error> {
+    let api: Api<CDBootstrap> = Api::default_namespaced(context.client.clone());
+    println!("Get Status on cdbootstrap instance test-bootstrap");
+    
+    let o = api.get_status("test-bootstrap").await?;
+    println!("Got status {:?} for {}", &o.status, &o.name_any());
+    
+    let o = api.get_metadata("test-bootstrap").await?;
+    println!(
+        "Got namespace {:?} for {}",
+        &o.metadata.namespace.clone().unwrap(),
+        &o.name_any()
+    );
 
     Ok(())
 }
