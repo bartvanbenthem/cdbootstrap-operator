@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use futures::stream::StreamExt;
-use kube::api::{Patch, PatchParams};
+use kube::api::{Patch, PatchParams, PostParams};
 use kube::runtime::watcher::Config;
 use kube::{client::Client, runtime::controller::Action, runtime::Controller, Api};
 use kube::{Resource, ResourceExt};
@@ -108,6 +108,7 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
             finalizer::add(client.clone(), &name, &namespace).await?;
             // Invoke creation of a Kubernetes built-in resource named deployment with `n` CDBootstrap service pods.
             cdbootstrap::deploy(client, &name, &namespace, &cr).await?;
+            create_status(context.clone(), &name, true).await?;
             Ok(Action::requeue(Duration::from_secs(10)))
         }
         CDBootstrapAction::Delete => {
@@ -126,10 +127,8 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
         }
         // The resource is already in desired state, do nothing and re-check after 10 seconds
         CDBootstrapAction::NoOp => {
-            update_status(context.clone(), true).await?;
             ////////////////////////////////////////////////////////////////
-            get_status(context.clone()).await?; // TEMP LOGGING
-            ////////////////////////////////////////////////////////////////
+            get_status(context.clone(), &name).await?; // TEMP LOGGING ////
             Ok(Action::requeue(Duration::from_secs(10)))
         }
     };
@@ -168,9 +167,10 @@ fn on_error(cr: Arc<CDBootstrap>, error: &Error, context: Arc<ContextData>) -> A
     // Clone the necessary data
     let context_clone = context.clone();
 
+    let name = String::from(&cr.metadata.name.clone().unwrap_or(cr.name_any()));
     // Use the existing Tokio runtime to spawn the async task
     tokio::spawn(async move {
-        match update_status(context_clone, false).await {
+        match patch_status(context_clone, &name, false).await {
             Ok(_) => {
                 // Update status was successful
                 // Handle other logic if needed
@@ -201,9 +201,48 @@ pub enum Error {
     UserInputError(String),
 }
 
-async fn update_status(context: Arc<ContextData>, success: bool) -> Result<(), Error> {
+async fn create_status(
+    context: Arc<ContextData>,
+    name: &String,
+    success: bool,
+) -> Result<(), Error> {
     let api: Api<CDBootstrap> = Api::default_namespaced(context.client.clone());
-    let pp = PatchParams::default(); // json merge patch
+
+    let md = api.get_metadata(name).await?;
+
+    let data = json!({
+        "apiVersion": "cnad.nl/v1beta1",
+        "kind": "CDBootstrap",
+        "metadata": {
+            "name": name,
+            // Updates need to provide our last observed version:
+            "resourceVersion": md.resource_version(),
+        },
+        "status": {
+            "succeeded": CDBootstrapStatus { succeeded: success }
+        }
+    });
+
+    let mut cdb = api.get_status(name).await?; // retrieve partial object
+    println!("{:?} !!!!!!!!!!!!!", cdb.status);
+    cdb.status = Some(CDBootstrapStatus::default()); // update the job part
+    let pp = PostParams::default();
+    let result = serde_json::to_vec(&data).expect("Failed to serialize data to JSON");
+
+    let cdb = api.replace_status(name, &pp, result).await?;
+    println!("{:?} !!!!!!!!!!!!!", cdb.status);
+
+    println!("Replaced status {:?} for {}", cdb.status, cdb.name_any());
+
+    Ok(())
+}
+
+async fn patch_status(
+    context: Arc<ContextData>,
+    name: &String,
+    success: bool,
+) -> Result<(), Error> {
+    let api: Api<CDBootstrap> = Api::default_namespaced(context.client.clone());
 
     let data = json!({
         "status": {
@@ -211,31 +250,28 @@ async fn update_status(context: Arc<ContextData>, success: bool) -> Result<(), E
         }
     });
 
-    let cdb = api
-        .patch_status("test-bootstrap", &pp, &Patch::Merge(data))
+    let pp = PatchParams::default(); // json merge patch
+    let _cdb = api
+        .patch_status(name, &pp, &Patch::Merge(data))
         .await?;
-    println!(
-        "{:?}",
-        cdb.status.unwrap_or(CDBootstrapStatus { succeeded: false })
-    );
 
     //assert_eq!(cdb.status.unwrap().succeeded, true);
 
     Ok(())
 }
 
-async fn get_status(context: Arc<ContextData>) -> Result<(), Error> {
+async fn get_status(context: Arc<ContextData>, name: &String) -> Result<(), Error> {
     let api: Api<CDBootstrap> = Api::default_namespaced(context.client.clone());
     println!("Get Status on cdbootstrap instance test-bootstrap");
-    
-    let o = api.get_status("test-bootstrap").await?;
-    println!("Got status {:?} for {}", &o.status, &o.name_any());
-    
-    let o = api.get_metadata("test-bootstrap").await?;
+
+    let cdb = api.get_status(name).await?;
+    println!("Got status {:?} for {}", &cdb.status, &cdb.name_any());
+
+    let cdb = api.get_metadata(name).await?;
     println!(
         "Got namespace {:?} for {}",
-        &o.metadata.namespace.clone().unwrap(),
-        &o.name_any()
+        &cdb.metadata.namespace.clone().unwrap(),
+        &cdb.name_any()
     );
 
     Ok(())
