@@ -127,11 +127,9 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
         // The resource is already in desired state, do nothing and re-check after 10 seconds
         CDBootstrapAction::NoOp => {
             update_status(context.clone(), true).await?;
-
             ////////////////////////////////////////////////////////////////
-            get_status(context.clone()).await?;
+            get_status(context.clone()).await?; // TEMP LOGGING
             ////////////////////////////////////////////////////////////////
-
             Ok(Action::requeue(Duration::from_secs(10)))
         }
     };
