@@ -1,12 +1,14 @@
 use std::sync::Arc;
 
 use futures::stream::StreamExt;
+use kube::api::{Patch, PatchParams};
 use kube::runtime::watcher::Config;
 use kube::{client::Client, runtime::controller::Action, runtime::Controller, Api};
 use kube::{Resource, ResourceExt};
+use serde_json::json;
 use tokio::time::Duration;
 
-use crate::crd::CDBootstrap;
+use crate::crd::{CDBootstrap, CDBootstrapStatus};
 
 mod cdbootstrap;
 pub mod crd;
@@ -90,6 +92,7 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
         // the namespace could be checked for existence first.
         Some(namespace) => namespace,
     };
+
     let name = cr.name_any(); // Name of the CDBootstrap resource is used to name the subresources as well.
 
     // Performs action as decided by the `determine_action` function.
@@ -116,14 +119,30 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
             // with that error.
             // Note: A more advanced implementation would check for the Deployment's existence.
             cdbootstrap::delete(client.clone(), &name, &namespace).await?;
-
             // Once the deployment is successfully removed, remove the finalizer to make it possible
             // for Kubernetes to delete the `CDBootstrap` resource.
             finalizer::delete(client, &name, &namespace).await?;
             Ok(Action::await_change()) // Makes no sense to delete after a successful delete, as the resource is gone
         }
         // The resource is already in desired state, do nothing and re-check after 10 seconds
-        CDBootstrapAction::NoOp => Ok(Action::requeue(Duration::from_secs(10))),
+        CDBootstrapAction::NoOp => {
+            update_status(context.clone(), true).await?;
+
+            ////////////////////////////////////////////////////////////////
+            let api: Api<CDBootstrap> = Api::default_namespaced(context.client.clone());
+            println!("Get Status on cdbootstrap instance test-bootstrap");
+            let o = api.get_status("test-bootstrap").await?;
+            println!("Got status {:?} for {}", &o.status, &o.name_any());
+            let o = api.get_metadata("test-bootstrap").await?;
+            println!(
+                "Got namespace {:?} for {}",
+                &o.metadata.namespace.clone().unwrap(),
+                &o.name_any()
+            );
+            ////////////////////////////////////////////////////////////////
+
+            Ok(Action::requeue(Duration::from_secs(10)))
+        }
     };
 }
 
@@ -156,7 +175,26 @@ fn determine_action(cr: &CDBootstrap) -> CDBootstrapAction {
 /// - `cdbootstrap`: The erroneous resource.
 /// - `error`: A reference to the `kube::Error` that occurred during reconciliation.
 /// - `_context`: Unused argument. Context Data "injected" automatically by kube-rs.
-fn on_error(cr: Arc<CDBootstrap>, error: &Error, _context: Arc<ContextData>) -> Action {
+fn on_error(cr: Arc<CDBootstrap>, error: &Error, context: Arc<ContextData>) -> Action {
+
+    // Clone the necessary data
+    let context_clone = context.clone();
+
+    // Use the existing Tokio runtime to spawn the async task
+    tokio::spawn(async move {
+        match update_status(context_clone, false).await {
+            Ok(_) => {
+                // Update status was successful
+                // Handle other logic if needed
+            }
+            Err(e) => {
+                // Update status failed, handle the error
+                eprintln!("Failed to update status: {:?}", e);
+            }
+        }
+    });
+
+    // Continue with the rest of your on_error logic
     eprintln!("Reconciliation error:\n{:?}.\n{:?}", error, cr);
     Action::requeue(Duration::from_secs(5))
 }
@@ -173,4 +211,27 @@ pub enum Error {
     /// Error in user input or CDBootstrap resource definition, typically missing fields.
     #[error("Invalid CDBootstrap CRD: {0}")]
     UserInputError(String),
+}
+
+async fn update_status(context: Arc<ContextData>, success: bool) -> Result<(), Error> {
+    let api: Api<CDBootstrap> = Api::default_namespaced(context.client.clone());
+    let pp = PatchParams::default(); // json merge patch
+
+    let data = json!({
+        "status": {
+            "succeeded": CDBootstrapStatus { succeeded: success }
+        }
+    });
+
+    let cdb = api
+        .patch_status("test-bootstrap", &pp, &Patch::Merge(data))
+        .await?;
+    println!(
+        "{:?}",
+        cdb.status.unwrap_or(CDBootstrapStatus { succeeded: false })
+    );
+
+    //assert_eq!(cdb.status.unwrap().succeeded, true);
+
+    Ok(())
 }

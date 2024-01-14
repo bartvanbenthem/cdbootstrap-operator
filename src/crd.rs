@@ -21,5 +21,5 @@ pub struct CDBootstrapSpec {
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Default, JsonSchema)]
 pub struct CDBootstrapStatus {
-    pub reconcile_success: bool,
+    pub succeeded: bool,
 }
