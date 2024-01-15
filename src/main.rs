@@ -218,7 +218,7 @@ async fn patch_status(
     let cdb = api.patch_status(name, &pp, &Patch::Merge(data)).await?;
     println!("Patched status {:?} for {}", cdb.status, cdb.name_any());
 
-    //assert_eq!(cdb.status.unwrap().succeeded, true);
+    //assert_eq!(cdb.status.expect("NO STATUS FOUND").succeeded, true);
 
     Ok(())
 }
