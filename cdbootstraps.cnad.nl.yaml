@@ -2,12 +2,11 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   name: cdbootstraps.cnad.nl
-#  namespace: default # For easier deployment and avoid permissions collisions on most clusters, the resource is namespace-scoped. More information at: https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/
 spec:
   group: cnad.nl
   names:
     kind: CDBootstrap
-    plural: cdbootstraps # If not specified, Kubernetes would assume the plural is "bootstraps"
+    plural: cdbootstraps
     singular: cdbootstrap
     shortNames:
       - cdbootstrap
@@ -18,27 +17,26 @@ spec:
       storage: true
       schema:
         openAPIV3Schema:
-          description: CDBootsrap is the Schema for the cdtargets API
+          description: |
+            CDBootstrap is the Schema for the cdbootstraps API.
+            It defines the structure of the custom resource.
           type: object
           properties:
             apiVersion:
-              description: 'APIVersion defines the versioned schema of this representation
-                of an object. Servers should convert recognized schemas to the latest
-                internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+              description: 'APIVersion defines the versioned schema of this representation of an object.'
               type: string
             kind:
-              description: 'Kind is a string value representing the REST resource this
-                object represents. Servers may infer this from the endpoint the client
-                submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+              description: 'Kind is a string value representing the REST resource this object represents.'
               type: string
             metadata:
               type: object
-            spec: # There is only one (required) field named "replicas" specifying how many pods are created by the Operator
+            spec:
               type: object
               properties:
                 replicas:
                   type: integer
                   format: int32
-              required: ["replicas"]
+              required:
+                - replicas
       subresources:
         status: {}

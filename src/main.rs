@@ -122,12 +122,12 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
             cdbootstrap::delete(client.clone(), &name, &namespace).await?;
             // Once the deployment is successfully removed, remove the finalizer to make it possible
             // for Kubernetes to delete the `CDBootstrap` resource.
-            finalizer::delete(client, &name, &namespace).await?;
+            finalizer::delete(client.clone(), &name, &namespace).await?;
             Ok(Action::await_change()) // Makes no sense to delete after a successful delete, as the resource is gone
         }
         // The resource is already in desired state, do nothing and re-check after 10 seconds
         CDBootstrapAction::NoOp => {
-            //patch_status(client.clone(), &name, true).await?;
+            //status::patch(client.clone(), &name, true).await?;
             status::patch_test(client.clone(), &name, &namespace, true).await?;
             ////////////////////////////////////////////////////////////////
             status::get(client.clone(), &name).await?; // TEMP LOGGING ////

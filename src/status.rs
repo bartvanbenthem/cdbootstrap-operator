@@ -1,7 +1,6 @@
 use anyhow::Result;
 use kube::api::{Patch, PatchParams, PostParams};
-use kube::ResourceExt;
-use kube::{client::Client, Api, Error};
+use kube::{Api, Client, Error, ResourceExt};
 use serde_json::{json, Value};
 use tracing::*;
 
@@ -15,14 +14,16 @@ pub async fn patch_test(
 ) -> Result<CDBootstrap, kube::Error> {
     let api: Api<CDBootstrap> = Api::namespaced(client, namespace);
     let status: Value = json!({
-        "status": CDBootstrapStatus { succeeded: success }
+        "status": {
+            "succeeded": success
+        }
     });
 
     let patch: Patch<&Value> = Patch::Merge(&status);
     api.patch(name, &PatchParams::default(), &patch).await
 }
 
-pub async fn patch(client: Client, name: &String, success: bool) -> Result<(), Error> {
+pub async fn patch(client: Client, name: &String, success: bool) -> Result<CDBootstrap, Error> {
     let api: Api<CDBootstrap> = Api::default_namespaced(client);
 
     let data = json!({
@@ -34,12 +35,7 @@ pub async fn patch(client: Client, name: &String, success: bool) -> Result<(), E
     println!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 
     let pp = PatchParams::default(); // json merge patch
-    let cdb = api.patch_status(name, &pp, &Patch::Merge(data)).await?;
-    info!("Patched status {:?} for {}", cdb.status, cdb.name_any());
-
-    //assert_eq!(cdb.status.expect("NO STATUS FOUND").succeeded, true);
-
-    Ok(())
+    api.patch_status(name, &pp, &Patch::Merge(data)).await
 }
 
 pub async fn get(client: Client, name: &String) -> Result<(), Error> {
@@ -60,7 +56,7 @@ pub async fn get(client: Client, name: &String) -> Result<(), Error> {
 }
 
 #[allow(dead_code)]
-pub async fn replace(client: Client, name: &String, success: bool) -> Result<(), Error> {
+pub async fn replace(client: Client, name: &String, success: bool) -> Result<CDBootstrap, Error> {
     let api: Api<CDBootstrap> = Api::default_namespaced(client);
 
     let md = api.get(name).await?;
@@ -81,9 +77,5 @@ pub async fn replace(client: Client, name: &String, success: bool) -> Result<(),
     let pp = PostParams::default();
 
     let result = serde_json::to_vec(&data).expect("Failed to serialize data to JSON");
-    let cdb = api.replace_status(name, &pp, result).await?;
-
-    info!("Replaced status {:?} for {}", cdb.status, cdb.name_any());
-
-    Ok(())
+    api.replace_status(name, &pp, result).await
 }
