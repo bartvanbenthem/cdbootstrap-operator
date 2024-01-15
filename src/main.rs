@@ -108,7 +108,6 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
             finalizer::add(client.clone(), &name, &namespace).await?;
             // Invoke creation of a Kubernetes built-in resource named deployment with `n` CDBootstrap service pods.
             cdbootstrap::deploy(client, &name, &namespace, &cr).await?;
-            create_status(context.clone(), &name, true).await?;
             Ok(Action::requeue(Duration::from_secs(10)))
         }
         CDBootstrapAction::Delete => {
@@ -127,6 +126,7 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
         }
         // The resource is already in desired state, do nothing and re-check after 10 seconds
         CDBootstrapAction::NoOp => {
+            patch_status(context.clone(), &name, true).await?;
             ////////////////////////////////////////////////////////////////
             get_status(context.clone(), &name).await?; // TEMP LOGGING ////
             Ok(Action::requeue(Duration::from_secs(10)))
@@ -201,7 +201,47 @@ pub enum Error {
     UserInputError(String),
 }
 
-async fn create_status(
+async fn patch_status(
+    context: Arc<ContextData>,
+    name: &String,
+    success: bool,
+) -> Result<(), Error> {
+    let api: Api<CDBootstrap> = Api::default_namespaced(context.client.clone());
+
+    let data = json!({
+        "status": {
+            "succeeded": CDBootstrapStatus { succeeded: success }
+        }
+    });
+
+    let pp = PatchParams::default(); // json merge patch
+    let cdb = api.patch_status(name, &pp, &Patch::Merge(data)).await?;
+    println!("Patched status {:?} for {}", cdb.status, cdb.name_any());
+
+    //assert_eq!(cdb.status.unwrap().succeeded, true);
+
+    Ok(())
+}
+
+async fn get_status(context: Arc<ContextData>, name: &String) -> Result<(), Error> {
+    let api: Api<CDBootstrap> = Api::default_namespaced(context.client.clone());
+    println!("Get Status on cdbootstrap instance {}", name);
+
+    let cdb = api.get_status(name).await?;
+    println!("Got status {:?} for {}", &cdb.status, &cdb.name_any());
+
+    let cdb = api.get_metadata(name).await?;
+    println!(
+        "Got namespace {:?} for {}",
+        &cdb.metadata.namespace.clone().unwrap(),
+        &cdb.name_any()
+    );
+
+    Ok(())
+}
+
+#[allow(dead_code)]
+async fn replace_status(
     context: Arc<ContextData>,
     name: &String,
     success: bool,
@@ -237,42 +277,30 @@ async fn create_status(
     Ok(())
 }
 
-async fn patch_status(
-    context: Arc<ContextData>,
-    name: &String,
-    success: bool,
-) -> Result<(), Error> {
-    let api: Api<CDBootstrap> = Api::default_namespaced(context.client.clone());
-
-    let data = json!({
-        "status": {
-            "succeeded": CDBootstrapStatus { succeeded: success }
-        }
-    });
-
-    let pp = PatchParams::default(); // json merge patch
-    let _cdb = api
-        .patch_status(name, &pp, &Patch::Merge(data))
-        .await?;
-
-    //assert_eq!(cdb.status.unwrap().succeeded, true);
-
-    Ok(())
-}
-
-async fn get_status(context: Arc<ContextData>, name: &String) -> Result<(), Error> {
-    let api: Api<CDBootstrap> = Api::default_namespaced(context.client.clone());
-    println!("Get Status on cdbootstrap instance test-bootstrap");
-
-    let cdb = api.get_status(name).await?;
-    println!("Got status {:?} for {}", &cdb.status, &cdb.name_any());
-
-    let cdb = api.get_metadata(name).await?;
-    println!(
-        "Got namespace {:?} for {}",
-        &cdb.metadata.namespace.clone().unwrap(),
-        &cdb.name_any()
-    );
-
-    Ok(())
-}
+//async fn patch_custom_resource_status(
+//    custom_resource: &CDBootstrap,
+//    new_status: CDBootstrapStatus,
+//) -> Result<(), Error> {
+//    let api: Api<CDBootstrap> = Api::namespaced(client, "default"); // Change the namespace as needed
+//
+//    let patch_params = PatchParams::apply("my-operator"); // Replace "my-operator" with your controller's name
+//
+//    // Create a JSON patch for updating the status
+//    let patch = Patch::Merge(vec![
+//        json_patch::PatchOperation::Add(json_patch::AddOperation {
+//            path: "/status".to_string(),
+//            value: serde_json::to_value(&new_status)?,
+//        }),
+//    ]);
+//
+//    // Patch the custom resource status
+//    api.patch_status(
+//        &custom_resource.name(),
+//        &patch_params,
+//        serde_json::to_vec(&patch)?,
+//    )
+//    .await?;
+//
+//    Ok(())
+//}
+//
