@@ -4,24 +4,9 @@ use kube::{Api, Client, Error, ResourceExt};
 use serde_json::{json, Value};
 use tracing::*;
 
+use std::collections::BTreeMap;
+
 use crate::crd::{CDBootstrap, CDBootstrapStatus};
-
-pub async fn patch_test(
-    client: Client,
-    name: &str,
-    namespace: &str,
-    success: bool,
-) -> Result<CDBootstrap, kube::Error> {
-    let api: Api<CDBootstrap> = Api::namespaced(client, namespace);
-    let status: Value = json!({
-        "status": {
-            "succeeded": success
-        }
-    });
-
-    let patch: Patch<&Value> = Patch::Merge(&status);
-    api.patch(name, &PatchParams::default(), &patch).await
-}
 
 pub async fn patch(client: Client, name: &String, success: bool) -> Result<CDBootstrap, Error> {
     let api: Api<CDBootstrap> = Api::default_namespaced(client);
@@ -31,19 +16,15 @@ pub async fn patch(client: Client, name: &String, success: bool) -> Result<CDBoo
     });
 
     println!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-    println!("{:?}", data);
+    println!("{:?}", &data);
     println!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 
     let pp = PatchParams::default(); // json merge patch
-    api.patch_status(name, &pp, &Patch::Merge(data)).await
+    api.patch_status(name, &pp, &Patch::Merge(&data)).await
 }
 
 pub async fn get(client: Client, name: &String) -> Result<(), Error> {
     let api: Api<CDBootstrap> = Api::default_namespaced(client);
-    info!("Get Status on cdbootstrap instance {}", name);
-
-    let cdb = api.get_status(name).await?;
-    info!("Got status {:?} for {}", &cdb.status, &cdb.name_any());
 
     let cdb = api.get_metadata(name).await?;
     info!(
@@ -51,6 +32,10 @@ pub async fn get(client: Client, name: &String) -> Result<(), Error> {
         &cdb.metadata.namespace.clone().unwrap(),
         &cdb.name_any()
     );
+
+    info!("Get Status on cdbootstrap instance {}", name);
+    let cdb = api.get_status(name).await?;
+    info!("Got status {:?} for {}", &cdb.status, &cdb.name_any());
 
     Ok(())
 }
@@ -78,4 +63,28 @@ pub async fn replace(client: Client, name: &String, success: bool) -> Result<CDB
 
     let result = serde_json::to_vec(&data).expect("Failed to serialize data to JSON");
     api.replace_status(name, &pp, result).await
+}
+
+#[allow(dead_code)]
+pub async fn patch_spec_test(
+    client: Client,
+    name: &str,
+    namespace: &str,
+) -> Result<CDBootstrap, kube::Error> {
+    let api: Api<CDBootstrap> = Api::namespaced(client, namespace);
+
+    let mut labels: BTreeMap<String, String> = BTreeMap::new();
+    labels.insert("app".to_owned(), name.to_owned());
+
+    let replicas: Value = json!({
+        "metadata": {
+            "labels": labels
+        },
+        "spec": {
+            "replicas": 4
+        }
+    });
+
+    let patch: Patch<&Value> = Patch::Merge(&replicas);
+    api.patch(name, &PatchParams::default(), &patch).await
 }

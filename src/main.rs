@@ -108,7 +108,7 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
             // of `kube::Error` to the `Error` defined in this crate.
             finalizer::add(client.clone(), &name, &namespace).await?;
             // Invoke creation of a Kubernetes built-in resource named deployment with `n` CDBootstrap service pods.
-            cdbootstrap::deploy(client.clone(), &name, &namespace, &cr).await?;
+            cdbootstrap::deploy(client, &name, &namespace, &cr).await?;
             Ok(Action::requeue(Duration::from_secs(20)))
         }
         CDBootstrapAction::Delete => {
@@ -122,15 +122,15 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
             cdbootstrap::delete(client.clone(), &name, &namespace).await?;
             // Once the deployment is successfully removed, remove the finalizer to make it possible
             // for Kubernetes to delete the `CDBootstrap` resource.
-            finalizer::delete(client.clone(), &name, &namespace).await?;
+            finalizer::delete(client, &name, &namespace).await?;
             Ok(Action::await_change()) // Makes no sense to delete after a successful delete, as the resource is gone
         }
         // The resource is already in desired state, do nothing and re-check after 10 seconds
         CDBootstrapAction::NoOp => {
-            //status::patch(client.clone(), &name, true).await?;
-            status::patch_test(client.clone(), &name, &namespace, true).await?;
+            status::patch(client.clone(), &name, true).await?;
+            //status::patch_spec_test(client.clone(), &name, &namespace).await?;
             ////////////////////////////////////////////////////////////////
-            status::get(client.clone(), &name).await?; // TEMP LOGGING ////
+            status::get(client, &name).await?; // TEMP LOGGING ////
             Ok(Action::requeue(Duration::from_secs(10)))
         }
     };

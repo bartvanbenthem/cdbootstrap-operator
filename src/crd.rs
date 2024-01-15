@@ -12,7 +12,6 @@ use serde::{Deserialize, Serialize};
     version = "v1beta1",
     kind = "CDBootstrap",
     plural = "cdbootstraps",
-    //derive = "PartialEq",
     namespaced
 )]
 #[kube(status = "CDBootstrapStatus")]
