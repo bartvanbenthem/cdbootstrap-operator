@@ -276,31 +276,3 @@ async fn replace_status(
 
     Ok(())
 }
-
-//async fn patch_custom_resource_status(
-//    custom_resource: &CDBootstrap,
-//    new_status: CDBootstrapStatus,
-//) -> Result<(), Error> {
-//    let api: Api<CDBootstrap> = Api::namespaced(client, "default"); // Change the namespace as needed
-//
-//    let patch_params = PatchParams::apply("my-operator"); // Replace "my-operator" with your controller's name
-//
-//    // Create a JSON patch for updating the status
-//    let patch = Patch::Merge(vec![
-//        json_patch::PatchOperation::Add(json_patch::AddOperation {
-//            path: "/status".to_string(),
-//            value: serde_json::to_value(&new_status)?,
-//        }),
-//    ]);
-//
-//    // Patch the custom resource status
-//    api.patch_status(
-//        &custom_resource.name(),
-//        &patch_params,
-//        serde_json::to_vec(&patch)?,
-//    )
-//    .await?;
-//
-//    Ok(())
-//}
-//
