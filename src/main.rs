@@ -1,21 +1,22 @@
-use std::sync::Arc;
-
+use anyhow::Result;
 use futures::stream::StreamExt;
-use kube::api::{Patch, PatchParams, PostParams};
 use kube::runtime::watcher::Config;
 use kube::{client::Client, runtime::controller::Action, runtime::Controller, Api};
 use kube::{Resource, ResourceExt};
-use serde_json::json;
+use std::sync::Arc;
 use tokio::time::Duration;
+use tracing::*;
 
-use crate::crd::{CDBootstrap, CDBootstrapStatus};
+use crate::crd::CDBootstrap;
 
 mod cdbootstrap;
 pub mod crd;
 mod finalizer;
+mod status;
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt::init();
     // First, a Kubernetes client must be obtained using the `kube` crate
     // The client will later be moved to the custom controller
     let kubernetes_client: Client = Client::try_default()
@@ -37,7 +38,7 @@ async fn main() {
         .for_each(|reconciliation_result| async move {
             match reconciliation_result {
                 Ok(custom_resource) => {
-                    println!("Reconciliation successful. Resource: {:?}", custom_resource);
+                    info!("Reconciliation successful. Resource: {:?}", custom_resource);
                 }
                 Err(reconciliation_err) => {
                     eprintln!("Reconciliation error: {:?}", reconciliation_err)
@@ -107,8 +108,8 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
             // of `kube::Error` to the `Error` defined in this crate.
             finalizer::add(client.clone(), &name, &namespace).await?;
             // Invoke creation of a Kubernetes built-in resource named deployment with `n` CDBootstrap service pods.
-            cdbootstrap::deploy(client, &name, &namespace, &cr).await?;
-            Ok(Action::requeue(Duration::from_secs(10)))
+            cdbootstrap::deploy(client.clone(), &name, &namespace, &cr).await?;
+            Ok(Action::requeue(Duration::from_secs(20)))
         }
         CDBootstrapAction::Delete => {
             // Deletes any subresources related to this `CDBootstrap` resources. If and only if all subresources
@@ -126,9 +127,10 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
         }
         // The resource is already in desired state, do nothing and re-check after 10 seconds
         CDBootstrapAction::NoOp => {
-            patch_status(context.clone(), &name, true).await?;
+            //patch_status(client.clone(), &name, true).await?;
+            status::patch_test(client.clone(), &name, &namespace, true).await?;
             ////////////////////////////////////////////////////////////////
-            get_status(context.clone(), &name).await?; // TEMP LOGGING ////
+            status::get(client.clone(), &name).await?; // TEMP LOGGING ////
             Ok(Action::requeue(Duration::from_secs(10)))
         }
     };
@@ -165,15 +167,14 @@ fn determine_action(cr: &CDBootstrap) -> CDBootstrapAction {
 /// - `_context`: Unused argument. Context Data "injected" automatically by kube-rs.
 fn on_error(cr: Arc<CDBootstrap>, error: &Error, context: Arc<ContextData>) -> Action {
     // Clone the necessary data
-    let context_clone = context.clone();
+    let client = context.client.clone();
 
     let name = String::from(&cr.metadata.name.clone().unwrap_or(cr.name_any()));
     // Use the existing Tokio runtime to spawn the async task
     tokio::spawn(async move {
-        match patch_status(context_clone, &name, false).await {
+        match status::patch(client, &name, false).await {
             Ok(_) => {
-                // Update status was successful
-                // Handle other logic if needed
+                info!("Updated status with reconcile error")
             }
             Err(e) => {
                 // Update status failed, handle the error
@@ -199,80 +200,4 @@ pub enum Error {
     /// Error in user input or CDBootstrap resource definition, typically missing fields.
     #[error("Invalid CDBootstrap CRD: {0}")]
     UserInputError(String),
-}
-
-async fn patch_status(
-    context: Arc<ContextData>,
-    name: &String,
-    success: bool,
-) -> Result<(), Error> {
-    let api: Api<CDBootstrap> = Api::default_namespaced(context.client.clone());
-
-    let data = json!({
-        "status": {
-            "succeeded": CDBootstrapStatus { succeeded: success }
-        }
-    });
-
-    let pp = PatchParams::default(); // json merge patch
-    let cdb = api.patch_status(name, &pp, &Patch::Merge(data)).await?;
-    println!("Patched status {:?} for {}", cdb.status, cdb.name_any());
-
-    //assert_eq!(cdb.status.expect("NO STATUS FOUND").succeeded, true);
-
-    Ok(())
-}
-
-async fn get_status(context: Arc<ContextData>, name: &String) -> Result<(), Error> {
-    let api: Api<CDBootstrap> = Api::default_namespaced(context.client.clone());
-    println!("Get Status on cdbootstrap instance {}", name);
-
-    let cdb = api.get_status(name).await?;
-    println!("Got status {:?} for {}", &cdb.status, &cdb.name_any());
-
-    let cdb = api.get_metadata(name).await?;
-    println!(
-        "Got namespace {:?} for {}",
-        &cdb.metadata.namespace.clone().unwrap(),
-        &cdb.name_any()
-    );
-
-    Ok(())
-}
-
-#[allow(dead_code)]
-async fn replace_status(
-    context: Arc<ContextData>,
-    name: &String,
-    success: bool,
-) -> Result<(), Error> {
-    let api: Api<CDBootstrap> = Api::default_namespaced(context.client.clone());
-
-    let md = api.get_metadata(name).await?;
-
-    let data = json!({
-        "apiVersion": "cnad.nl/v1beta1",
-        "kind": "CDBootstrap",
-        "metadata": {
-            "name": name,
-            // Updates need to provide our last observed version:
-            "resourceVersion": md.resource_version(),
-        },
-        "status": {
-            "succeeded": CDBootstrapStatus { succeeded: success }
-        }
-    });
-
-    let mut cdb = api.get_status(name).await?; // retrieve partial object
-    println!("{:?} !!!!!!!!!!!!!", cdb.status);
-    cdb.status = Some(CDBootstrapStatus::default()); // update the job part
-    let pp = PostParams::default();
-    let result = serde_json::to_vec(&data).expect("Failed to serialize data to JSON");
-
-    let cdb = api.replace_status(name, &pp, result).await?;
-    println!("{:?} !!!!!!!!!!!!!", cdb.status);
-
-    println!("Replaced status {:?} for {}", cdb.status, cdb.name_any());
-
-    Ok(())
 }
