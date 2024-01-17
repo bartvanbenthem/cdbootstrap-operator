@@ -146,7 +146,7 @@ impl CDBDeployment {
         Ok(())
     }
 
-    pub async fn is_matched(
+    pub async fn desired_state(
         client: Client,
         cr: &CDBootstrap,
         name: &str,
@@ -160,7 +160,7 @@ impl CDBDeployment {
             Ok(existing_deployment) => existing_deployment,
             Err(_) => {
                 // Handle the case when the deployment is not found
-                info!("Not able to find existing deployment");
+                info!("Not able to find the existing {} deployment", &name);
                 return Ok(false);
             }
         };

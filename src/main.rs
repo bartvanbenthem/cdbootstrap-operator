@@ -100,7 +100,7 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
     let name = cr.name_any(); // Name of the CDBootstrap resource is used to name the subresources as well.
 
     let subresources_in_sync =
-        CDBDeployment::is_matched(client.clone(), &cr, &name, &namespace).await?;
+        CDBDeployment::desired_state(client.clone(), &cr, &name, &namespace).await?;
 
     // Performs action as decided by the `determine_action` function.
     return match determine_action(&cr, subresources_in_sync) {
@@ -119,10 +119,10 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
             Ok(Action::requeue(Duration::from_secs(20)))
         }
         CDBootstrapAction::Update => {
-            info!("subresources are not in sync, starting update");
+            info!("The {} subresources are not in desired state", &name);
             CDBDeployment::apply(client.clone(), &name, &namespace, &cr).await?;
             status::patch(client.clone(), &name, &namespace, true).await?;
-            info!("Updated subresources");
+            info!("Updated {} subresources to desired state", &name);
             Ok(Action::requeue(Duration::from_secs(20)))
         }
         CDBootstrapAction::Delete => {
@@ -153,7 +153,7 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
 ///
 /// # Arguments
 /// - `cdbootstrap`: A reference to `CDBootstrap` being reconciled to decide next action upon.
-fn determine_action(cr: &CDBootstrap, sync: bool) -> CDBootstrapAction {
+fn determine_action(cr: &CDBootstrap, desired_state: bool) -> CDBootstrapAction {
     return if cr.meta().deletion_timestamp.is_some() {
         CDBootstrapAction::Delete
     } else if cr
@@ -163,7 +163,7 @@ fn determine_action(cr: &CDBootstrap, sync: bool) -> CDBootstrapAction {
         .map_or(true, |finalizers| finalizers.is_empty())
     {
         CDBootstrapAction::Create
-    } else if sync != true {
+    } else if !desired_state {
         CDBootstrapAction::Update
     } else {
         CDBootstrapAction::NoOp
