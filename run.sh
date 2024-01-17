@@ -6,3 +6,4 @@ cargo fmt
 cargo run
 
 # kubectl apply -f config/samples/cdbootstrap-example.yaml
+# kubectl apply -f config/samples/update.yaml

@@ -1,4 +1,3 @@
-use anyhow::Result;
 use kube::api::{Patch, PatchParams, PostParams};
 use kube::{Api, Client, Error, ResourceExt};
 use serde_json::{json, Value};
@@ -8,23 +7,24 @@ use std::collections::BTreeMap;
 
 use crate::crd::{CDBootstrap, CDBootstrapStatus};
 
-pub async fn patch(client: Client, name: &String, success: bool) -> Result<CDBootstrap, Error> {
-    let api: Api<CDBootstrap> = Api::default_namespaced(client);
+pub async fn patch(
+    client: Client,
+    name: &String,
+    namespace: &String,
+    success: bool,
+) -> Result<CDBootstrap, Error> {
+    let api: Api<CDBootstrap> = Api::namespaced(client, namespace);
 
-    let data = json!({
+    let data: Value = json!({
         "status": CDBootstrapStatus { succeeded: success }
     });
 
-    println!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-    println!("{:?}", &data);
-    println!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-
-    let pp = PatchParams::default(); // json merge patch
-    api.patch_status(name, &pp, &Patch::Merge(&data)).await
+    api.patch_status(name, &PatchParams::default(), &Patch::Merge(&data))
+        .await
 }
 
-pub async fn get(client: Client, name: &String) -> Result<(), Error> {
-    let api: Api<CDBootstrap> = Api::default_namespaced(client);
+pub async fn print(client: Client, name: &String, namespace: &String) -> Result<(), Error> {
+    let api: Api<CDBootstrap> = Api::namespaced(client, namespace);
 
     let cdb = api.get_metadata(name).await?;
     info!(
@@ -40,13 +40,21 @@ pub async fn get(client: Client, name: &String) -> Result<(), Error> {
     Ok(())
 }
 
+////////////////////////////////////////////////////
+/// TROUBLESHOOTING
+
 #[allow(dead_code)]
-pub async fn replace(client: Client, name: &String, success: bool) -> Result<CDBootstrap, Error> {
-    let api: Api<CDBootstrap> = Api::default_namespaced(client);
+pub async fn replace(
+    client: Client,
+    name: &String,
+    namespace: &String,
+    success: bool,
+) -> Result<CDBootstrap, Error> {
+    let api: Api<CDBootstrap> = Api::namespaced(client, namespace);
 
     let md = api.get(name).await?;
 
-    let data = json!({
+    let data: Value = json!({
         "apiVersion": "cnad.nl/v1beta1",
         "kind": "CDBootstrap",
         "metadata": {
@@ -59,14 +67,14 @@ pub async fn replace(client: Client, name: &String, success: bool) -> Result<CDB
 
     let mut cdb = api.get(name).await?; // retrieve partial object
     cdb.status = Some(CDBootstrapStatus::default()); // update the job part
-    let pp = PostParams::default();
 
     let result = serde_json::to_vec(&data).expect("Failed to serialize data to JSON");
-    api.replace_status(name, &pp, result).await
+    api.replace_status(name, &PostParams::default(), result)
+        .await
 }
 
 #[allow(dead_code)]
-pub async fn patch_spec_test(
+pub async fn patch_spec_label_status_debug(
     client: Client,
     name: &str,
     namespace: &str,
@@ -76,15 +84,42 @@ pub async fn patch_spec_test(
     let mut labels: BTreeMap<String, String> = BTreeMap::new();
     labels.insert("app".to_owned(), name.to_owned());
 
-    let replicas: Value = json!({
+    let data: Value = json!({
         "metadata": {
             "labels": labels
         },
         "spec": {
             "replicas": 4
+        },
+        "status": {
+            "succeeded": true
         }
     });
 
-    let patch: Patch<&Value> = Patch::Merge(&replicas);
+    let patch: Patch<&Value> = Patch::Merge(&data);
     api.patch(name, &PatchParams::default(), &patch).await
+}
+
+#[allow(dead_code)]
+pub async fn patch_status_debug(
+    client: Client,
+    name: &str,
+    namespace: &str,
+) -> Result<CDBootstrap, kube::Error> {
+    let api: Api<CDBootstrap> = Api::namespaced(client, namespace);
+
+    // Load the existing resource
+    let existing_resource = api.get(name).await?;
+    println!("{:?}", existing_resource.status);
+
+    // Create a patch for updating the status
+    let status_patch = json!({
+        "status": {
+            "succeeded": "true"
+        }
+    });
+
+    // Apply the patch to update the status
+    api.patch_status(name, &PatchParams::default(), &Patch::Merge(&status_patch))
+        .await
 }

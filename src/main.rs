@@ -108,7 +108,7 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
             // of `kube::Error` to the `Error` defined in this crate.
             finalizer::add(client.clone(), &name, &namespace).await?;
             // Invoke creation of a Kubernetes built-in resource named deployment with `n` CDBootstrap service pods.
-            cdbootstrap::deploy(client, &name, &namespace, &cr).await?;
+            cdbootstrap::deploy_or_update(client, &name, &namespace, &cr).await?;
             Ok(Action::requeue(Duration::from_secs(20)))
         }
         CDBootstrapAction::Delete => {
@@ -127,10 +127,11 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
         }
         // The resource is already in desired state, do nothing and re-check after 10 seconds
         CDBootstrapAction::NoOp => {
-            status::patch(client.clone(), &name, true).await?;
+            cdbootstrap::deploy_or_update(client.clone(), &name, &namespace, &cr).await?;
+            status::patch(client.clone(), &name, &namespace, true).await?;
             //status::patch_spec_test(client.clone(), &name, &namespace).await?;
             ////////////////////////////////////////////////////////////////
-            status::get(client, &name).await?; // TEMP LOGGING ////
+            status::print(client, &name, &namespace).await?; // TEMP LOGGING ////
             Ok(Action::requeue(Duration::from_secs(10)))
         }
     };
@@ -170,9 +171,15 @@ fn on_error(cr: Arc<CDBootstrap>, error: &Error, context: Arc<ContextData>) -> A
     let client = context.client.clone();
 
     let name = String::from(&cr.metadata.name.clone().unwrap_or(cr.name_any()));
+    let namespace = String::from(
+        &cr.metadata
+            .namespace
+            .clone()
+            .unwrap_or(String::from("default")),
+    );
     // Use the existing Tokio runtime to spawn the async task
     tokio::spawn(async move {
-        match status::patch(client, &name, false).await {
+        match status::patch(client, &name, &namespace, false).await {
             Ok(_) => {
                 info!("Updated status with reconcile error")
             }
