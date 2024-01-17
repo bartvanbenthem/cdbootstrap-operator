@@ -1,3 +1,11 @@
+mod cdbootstrap;
+pub mod crd;
+mod finalizer;
+mod status;
+
+use crate::crd::CDBootstrap;
+use cdbootstrap::CDBDeployment;
+
 use anyhow::Result;
 use futures::stream::StreamExt;
 use kube::runtime::watcher::Config;
@@ -6,13 +14,6 @@ use kube::{Resource, ResourceExt};
 use std::sync::Arc;
 use tokio::time::Duration;
 use tracing::*;
-
-use crate::crd::CDBootstrap;
-
-mod cdbootstrap;
-pub mod crd;
-mod finalizer;
-mod status;
 
 #[tokio::main]
 async fn main() {
@@ -69,6 +70,8 @@ impl ContextData {
 enum CDBootstrapAction {
     /// Create the subresources, this includes spawning `n` pods with CDBootstrap service
     Create,
+    /// Updates all subresources created in the `Create` phase
+    Update,
     /// Delete all subresources created in the `Create` phase
     Delete,
     /// This `CDBootstrap` resource is in desired state and requires no actions to be taken
@@ -96,8 +99,11 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
 
     let name = cr.name_any(); // Name of the CDBootstrap resource is used to name the subresources as well.
 
+    let subresources_in_sync =
+        CDBDeployment::is_matched(client.clone(), &cr, &name, &namespace).await?;
+
     // Performs action as decided by the `determine_action` function.
-    return match determine_action(&cr) {
+    return match determine_action(&cr, subresources_in_sync) {
         CDBootstrapAction::Create => {
             // Creates a deployment with `n` CDBootstrap service pods, but applies a finalizer first.
             // Finalizer is applied first, as the operator might be shut down and restarted
@@ -108,7 +114,15 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
             // of `kube::Error` to the `Error` defined in this crate.
             finalizer::add(client.clone(), &name, &namespace).await?;
             // Invoke creation of a Kubernetes built-in resource named deployment with `n` CDBootstrap service pods.
-            cdbootstrap::deploy_or_update(client, &name, &namespace, &cr).await?;
+            CDBDeployment::apply(client.clone(), &name, &namespace, &cr).await?;
+            status::patch(client, &name, &namespace, true).await?;
+            Ok(Action::requeue(Duration::from_secs(20)))
+        }
+        CDBootstrapAction::Update => {
+            info!("subresources are not in sync, starting update");
+            CDBDeployment::apply(client.clone(), &name, &namespace, &cr).await?;
+            status::patch(client.clone(), &name, &namespace, true).await?;
+            info!("Updated subresources");
             Ok(Action::requeue(Duration::from_secs(20)))
         }
         CDBootstrapAction::Delete => {
@@ -119,7 +133,7 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
             // automatically converted into `Error` defined in this crate and the reconciliation is ended
             // with that error.
             // Note: A more advanced implementation would check for the Deployment's existence.
-            cdbootstrap::delete(client.clone(), &name, &namespace).await?;
+            CDBDeployment::delete(client.clone(), &name, &namespace).await?;
             // Once the deployment is successfully removed, remove the finalizer to make it possible
             // for Kubernetes to delete the `CDBootstrap` resource.
             finalizer::delete(client, &name, &namespace).await?;
@@ -127,12 +141,8 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
         }
         // The resource is already in desired state, do nothing and re-check after 10 seconds
         CDBootstrapAction::NoOp => {
-            cdbootstrap::deploy_or_update(client.clone(), &name, &namespace, &cr).await?;
-            status::patch(client.clone(), &name, &namespace, true).await?;
-            //status::patch_spec_test(client.clone(), &name, &namespace).await?;
-            ////////////////////////////////////////////////////////////////
             status::print(client, &name, &namespace).await?; // TEMP LOGGING ////
-            Ok(Action::requeue(Duration::from_secs(10)))
+            Ok(Action::requeue(Duration::from_secs(60)))
         }
     };
 }
@@ -143,7 +153,7 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
 ///
 /// # Arguments
 /// - `cdbootstrap`: A reference to `CDBootstrap` being reconciled to decide next action upon.
-fn determine_action(cr: &CDBootstrap) -> CDBootstrapAction {
+fn determine_action(cr: &CDBootstrap, sync: bool) -> CDBootstrapAction {
     return if cr.meta().deletion_timestamp.is_some() {
         CDBootstrapAction::Delete
     } else if cr
@@ -153,6 +163,8 @@ fn determine_action(cr: &CDBootstrap) -> CDBootstrapAction {
         .map_or(true, |finalizers| finalizers.is_empty())
     {
         CDBootstrapAction::Create
+    } else if sync != true {
+        CDBootstrapAction::Update
     } else {
         CDBootstrapAction::NoOp
     };
