@@ -35,13 +35,14 @@ pub async fn print(client: Client, name: &String, namespace: &String) -> Result<
 
     info!("Get Status on cdbootstrap instance {}", name);
     let cdb = api.get_status(name).await?;
+
     info!("Got status {:?} for {}", &cdb.status, &cdb.name_any());
 
     Ok(())
 }
 
 ////////////////////////////////////////////////////
-/// TROUBLESHOOTING
+/// NOT USED
 
 #[allow(dead_code)]
 pub async fn replace(
@@ -98,28 +99,4 @@ pub async fn patch_spec_label_status_debug(
 
     let patch: Patch<&Value> = Patch::Merge(&data);
     api.patch(name, &PatchParams::default(), &patch).await
-}
-
-#[allow(dead_code)]
-pub async fn patch_status_debug(
-    client: Client,
-    name: &str,
-    namespace: &str,
-) -> Result<CDBootstrap, kube::Error> {
-    let api: Api<CDBootstrap> = Api::namespaced(client, namespace);
-
-    // Load the existing resource
-    let existing_resource = api.get(name).await?;
-    println!("{:?}", existing_resource.status);
-
-    // Create a patch for updating the status
-    let status_patch = json!({
-        "status": {
-            "succeeded": "true"
-        }
-    });
-
-    // Apply the patch to update the status
-    api.patch_status(name, &PatchParams::default(), &Patch::Merge(&status_patch))
-        .await
 }

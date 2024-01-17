@@ -38,5 +38,11 @@ spec:
                   format: int32
               required:
                 - replicas
+            status:
+              type: object
+              properties:
+                succeeded:
+                  type: boolean
       subresources:
+        # status enables the status subresource.
         status: {}
