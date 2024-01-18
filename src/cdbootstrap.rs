@@ -25,6 +25,8 @@ impl CDBDeployment {
         namespace: &str,
         cr: &CDBootstrap,
     ) -> Result<Deployment, Error> {
+        let image = String::from("ghcr.io/bartvanbenthem/azp-agent-alpine:latest");
+
         let mut labels: BTreeMap<String, String> = BTreeMap::new();
         labels.insert("app".to_owned(), name.to_owned());
 
@@ -53,7 +55,7 @@ impl CDBDeployment {
                             spec: Some(PodSpec {
                                 containers: vec![Container {
                                     name: name.to_owned(),
-                                    image: Some("ghcr.io/bartvanbenthem/azp-agent-alpine:latest".to_owned()),
+                                    image: Some(image.to_owned()),
                                     ports: Some(vec![ContainerPort {
                                         container_port: 8080,
                                         ..ContainerPort::default()
@@ -80,8 +82,8 @@ impl CDBDeployment {
             Err(_) => {
                 // Create a new deployment
                 info!(
-                    "The Deployment for {:?} does not exisist creating new deployment",
-                    &name
+                    "The Deployment for {:?} in namespace {} does not exisist creating new deployment",
+                    &name, &namespace
                 );
                 let mut labels: BTreeMap<String, String> = BTreeMap::new();
                 labels.insert("app".to_owned(), name.to_owned());
@@ -104,7 +106,7 @@ impl CDBDeployment {
                             spec: Some(PodSpec {
                                 containers: vec![Container {
                                     name: name.to_owned(),
-                                    image: Some("nginx:latest".to_owned()),
+                                    image: Some(image.to_owned()),
                                     ports: Some(vec![ContainerPort {
                                         container_port: 8080,
                                         ..ContainerPort::default()
