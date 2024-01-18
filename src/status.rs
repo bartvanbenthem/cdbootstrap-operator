@@ -26,17 +26,14 @@ pub async fn patch(
 pub async fn print(client: Client, name: &String, namespace: &String) -> Result<(), Error> {
     let api: Api<CDBootstrap> = Api::namespaced(client, namespace);
 
-    let cdb = api.get_metadata(name).await?;
-    info!(
-        "Got namespace {:?} for {}",
-        &cdb.metadata.namespace.clone().unwrap(),
-        &cdb.name_any()
-    );
-
-    info!("Get Status on cdbootstrap instance {}", name);
     let cdb = api.get_status(name).await?;
 
-    info!("Got status {:?} for {}", &cdb.status, &cdb.name_any());
+    info!(
+        "Got status {:?} for custom resource {} in namespace {}",
+        &cdb.status,
+        &cdb.name_any(),
+        namespace
+    );
 
     Ok(())
 }

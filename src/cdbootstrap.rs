@@ -53,7 +53,7 @@ impl CDBDeployment {
                             spec: Some(PodSpec {
                                 containers: vec![Container {
                                     name: name.to_owned(),
-                                    image: Some("nginx:latest".to_owned()),
+                                    image: Some("ghcr.io/bartvanbenthem/azp-agent-alpine:latest".to_owned()),
                                     ports: Some(vec![ContainerPort {
                                         container_port: 8080,
                                         ..ContainerPort::default()
