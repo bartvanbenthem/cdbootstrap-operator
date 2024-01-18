@@ -1,10 +1,12 @@
 use k8s_openapi::api::apps::v1::{Deployment, DeploymentSpec};
 use k8s_openapi::api::core::v1::{Container, ContainerPort, PodSpec, PodTemplateSpec};
+use k8s_openapi::api::networking::v1::NetworkPolicy;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
 use kube::api::{DeleteParams, ObjectMeta, PostParams};
 use kube::{Api, Client, Error};
+use serde_json::{json, Value};
 use std::collections::BTreeMap;
-use tracing::info;
+use tracing::*;
 
 use crate::crd::CDBootstrap;
 
@@ -82,7 +84,7 @@ impl CDBDeployment {
             Err(_) => {
                 // Create a new deployment
                 info!(
-                    "The Deployment for {:?} in namespace {} does not exisist creating new deployment",
+                    "Deployment {:?} in namespace {} does not exisist, creating new deployment",
                     &name, &namespace
                 );
                 let mut labels: BTreeMap<String, String> = BTreeMap::new();
@@ -177,5 +179,150 @@ impl CDBDeployment {
         } else {
             return Ok(false);
         }
+    }
+}
+
+pub struct CDBNetworking {}
+
+impl CDBNetworking {
+    pub async fn apply(
+        client: Client,
+        name: &str,
+        namespace: &str,
+    ) -> Result<NetworkPolicy, kube::Error> {
+        let labels: BTreeMap<String, String> = [("app".to_owned(), name.to_owned())]
+            .iter()
+            .cloned()
+            .collect();
+
+        // Define the NetworkPolicy configuration as JSON
+        let network_policy_json: Value = json!({
+            "apiVersion": "networking.k8s.io/v1",
+            "kind": "NetworkPolicy",
+            "metadata": {
+                "name": name,
+                "namespace": namespace,
+                "labels": labels
+            },
+            "spec": {
+                "podSelector": {
+                    "matchLabels": {
+                        "app": name,
+                        // Add other labels as needed
+                    }
+                },
+                "egress": [
+                    {
+                        "to": [
+                            {
+                                "ports": [
+                                    {
+                                        "port": 443,
+                                        "protocol": "TCP"
+                                    },
+                                    {
+                                        "port": 443,
+                                        "protocol": "UDP"
+                                    }
+                                ]
+                            }
+                        ],
+                        "to": [
+                            {
+                                "ipBlock": {
+                                    "cidr": "13.107.6.0/24"
+                                }
+                            },
+                            {
+                                "ipBlock": {
+                                    "cidr": "13.107.9.0/24"
+                                }
+                            },
+                            {
+                                "ipBlock": {
+                                    "cidr": "13.107.42.0/24"
+                                }
+                            },
+                            {
+                                "ipBlock": {
+                                    "cidr": "13.107.43.0/24"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                "policyTypes": ["Egress"]
+            }
+        });
+
+        // Convert the JSON to NetworkPolicy struct using serde
+        let network_policy_result: Result<NetworkPolicy, serde_json::Error> =
+            serde_json::from_value(network_policy_json);
+        let network_policy = match network_policy_result {
+            Ok(network_policy) => network_policy,
+            Err(err) => {
+                return Err(kube::Error::SerdeError(err));
+            }
+        };
+
+        // check for existing networkpolicy
+        let api: Api<NetworkPolicy> = Api::namespaced(client.clone(), namespace);
+        let existing_network = api.get(name).await;
+
+        match existing_network {
+            Ok(_) => {
+                let result = api
+                    .replace(name, &PostParams::default(), &network_policy)
+                    .await;
+                match result {
+                    Ok(network_policy) => {
+                        info!(
+                            "NetworkPolicy {} created successfully in namespace {}",
+                            name, namespace
+                        );
+                        Ok(network_policy)
+                    }
+                    Err(err) => {
+                        error!("Error creating NetworkPolicy: {:?}", err);
+                        Err(err)
+                    }
+                }
+            }
+            Err(_) => {
+                // Create or update the NetworkPolicy
+                let network_policy_api: Api<NetworkPolicy> =
+                    Api::namespaced(client.clone(), namespace);
+                let result = network_policy_api
+                    .create(&PostParams::default(), &network_policy)
+                    .await;
+                match result {
+                    Ok(network_policy) => {
+                        info!(
+                            "NetworkPolicy {} created successfully in namespace {}",
+                            name, namespace
+                        );
+                        Ok(network_policy)
+                    }
+                    Err(err) => {
+                        error!("Error creating NetworkPolicy: {:?}", err);
+                        Err(err)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Deletes an existing deployment.
+    ///
+    /// # Arguments:
+    /// - `client` - A Kubernetes client to delete the Deployment with
+    /// - `name` - Name of the deployment to delete
+    /// - `namespace` - Namespace the existing deployment resides in
+    ///
+    /// Note: It is assumed the deployment exists for simplicity. Otherwise returns an Error.
+    pub async fn delete(client: Client, name: &str, namespace: &str) -> Result<(), Error> {
+        let api: Api<NetworkPolicy> = Api::namespaced(client, namespace);
+        api.delete(name, &DeleteParams::default()).await?;
+        Ok(())
     }
 }

@@ -3,6 +3,7 @@ pub mod crd;
 mod finalizer;
 mod status;
 
+use crate::cdbootstrap::CDBNetworking;
 use crate::crd::CDBootstrap;
 use cdbootstrap::CDBDeployment;
 
@@ -42,7 +43,7 @@ async fn main() {
                     info!("Reconciliation successful. Resource: {:?}", custom_resource);
                 }
                 Err(reconciliation_err) => {
-                    eprintln!("Reconciliation error: {:?}", reconciliation_err)
+                    error!("Reconciliation error: {:?}", reconciliation_err)
                 }
             }
         })
@@ -119,6 +120,7 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
             );
             // Invoke creation of a Kubernetes built-in resource named deployment with `n` CDBootstrap service pods.
             CDBDeployment::apply(client.clone(), &name, &namespace, &cr).await?;
+            CDBNetworking::apply(client.clone(), &name, &namespace).await?;
             status::patch(client, &name, &namespace, true).await?;
             Ok(Action::requeue(Duration::from_secs(20)))
         }
@@ -128,6 +130,7 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
                 &name, &namespace
             );
             CDBDeployment::apply(client.clone(), &name, &namespace, &cr).await?;
+            CDBNetworking::apply(client.clone(), &name, &namespace).await?;
             status::patch(client.clone(), &name, &namespace, true).await?;
             info!(
                 "Updated {} subresources in namespace {} to desired state",
@@ -147,6 +150,7 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
             // with that error.
             // Note: A more advanced implementation would check for the Deployment's existence.
             CDBDeployment::delete(client.clone(), &name, &namespace).await?;
+            CDBNetworking::delete(client.clone(), &name, &namespace).await?;
             // Once the deployment is successfully removed, remove the finalizer to make it possible
             // for Kubernetes to delete the `CDBootstrap` resource.
             finalizer::delete(client, &name, &namespace).await?;
@@ -210,13 +214,13 @@ fn on_error(cr: Arc<CDBootstrap>, error: &Error, context: Arc<ContextData>) -> A
             }
             Err(e) => {
                 // Update status failed, handle the error
-                eprintln!("Failed to update status: {:?}", e);
+                error!("Failed to update status: {:?}", e);
             }
         }
     });
 
     // Continue with the rest of your on_error logic
-    eprintln!("Reconciliation error:\n{:?}.\n{:?}", error, cr);
+    error!("Reconciliation error:\n{:?}.\n{:?}", error, cr);
     Action::requeue(Duration::from_secs(5))
 }
 
