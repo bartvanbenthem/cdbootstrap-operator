@@ -195,7 +195,7 @@ fn on_error(cr: Arc<CDBootstrap>, error: &Error, context: Arc<ContextData>) -> A
     // Clone the necessary data
     let client = context.client.clone();
 
-    let name = String::from(&cr.metadata.name.clone().unwrap_or(cr.name_any()));
+    let name = String::from(&cr.name_any());
     let namespace = String::from(
         &cr.metadata
             .namespace
