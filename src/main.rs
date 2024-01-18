@@ -20,13 +20,13 @@ async fn main() {
     tracing_subscriber::fmt::init();
     // First, a Kubernetes client must be obtained using the `kube` crate
     // The client will later be moved to the custom controller
-    let kubernetes_client: Client = Client::try_default()
+    let kubeconfig: Client = Client::try_default()
         .await
         .expect("Expected a valid KUBECONFIG environment variable.");
 
     // Preparation of resources used by the `kube_runtime::Controller`
-    let crd_api: Api<CDBootstrap> = Api::all(kubernetes_client.clone());
-    let context: Arc<ContextData> = Arc::new(ContextData::new(kubernetes_client.clone()));
+    let crd_api: Api<CDBootstrap> = Api::all(kubeconfig.clone());
+    let context: Arc<ContextData> = Arc::new(ContextData::new(kubeconfig.clone()));
 
     // The controller comes from the `kube_runtime` crate and manages the reconciliation process.
     // It requires the following information:
@@ -99,11 +99,11 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
 
     let name = cr.name_any(); // Name of the CDBootstrap resource is used to name the subresources as well.
 
-    let subresources_in_sync =
+    let in_desired_state =
         CDBDeployment::desired_state(client.clone(), &cr, &name, &namespace).await?;
 
     // Performs action as decided by the `determine_action` function.
-    return match determine_action(&cr, subresources_in_sync) {
+    return match determine_action(&cr, in_desired_state) {
         CDBootstrapAction::Create => {
             // Creates a deployment with `n` CDBootstrap service pods, but applies a finalizer first.
             // Finalizer is applied first, as the operator might be shut down and restarted
@@ -113,22 +113,35 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
             // Apply the finalizer first. If that fails, the `?` operator invokes automatic conversion
             // of `kube::Error` to the `Error` defined in this crate.
             finalizer::add(client.clone(), &name, &namespace).await?;
+            info!(
+                "Creating {} subresources in namespace {}",
+                &name, &namespace
+            );
             // Invoke creation of a Kubernetes built-in resource named deployment with `n` CDBootstrap service pods.
             CDBDeployment::apply(client.clone(), &name, &namespace, &cr).await?;
             status::patch(client, &name, &namespace, true).await?;
             Ok(Action::requeue(Duration::from_secs(20)))
         }
         CDBootstrapAction::Update => {
-            info!("The {} subresources are not in desired state", &name);
+            info!(
+                "{} subresources in namespace {} are not in desired state",
+                &name, &namespace
+            );
             CDBDeployment::apply(client.clone(), &name, &namespace, &cr).await?;
             status::patch(client.clone(), &name, &namespace, true).await?;
-            info!("Updated {} subresources to desired state", &name);
+            info!(
+                "Updated {} subresources in namespace {} to desired state",
+                &name, &namespace
+            );
             Ok(Action::requeue(Duration::from_secs(20)))
         }
         CDBootstrapAction::Delete => {
             // Deletes any subresources related to this `CDBootstrap` resources. If and only if all subresources
             // are deleted, the finalizer is removed and Kubernetes is free to remove the `CDBootstrap` resource.
-
+            info!(
+                "Deleting {} subresources in namespace {}",
+                &name, &namespace
+            );
             //First, delete the deployment. If there is any error deleting the deployment, it is
             // automatically converted into `Error` defined in this crate and the reconciliation is ended
             // with that error.
