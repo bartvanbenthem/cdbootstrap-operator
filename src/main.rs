@@ -3,9 +3,9 @@ pub mod crd;
 mod finalizer;
 mod status;
 
-use crate::cdbootstrap::CDBNetworking;
+use crate::cdbootstrap::Policy;
 use crate::crd::CDBootstrap;
-use cdbootstrap::CDBDeployment;
+use cdbootstrap::Application;
 
 use anyhow::Result;
 use futures::stream::StreamExt;
@@ -101,7 +101,7 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
     let name = cr.name_any(); // Name of the CDBootstrap resource is used to name the subresources as well.
 
     let in_desired_state =
-        CDBDeployment::desired_state(client.clone(), &cr, &name, &namespace).await?;
+        Application::desired_state(client.clone(), &cr, &name, &namespace).await?;
 
     // Performs action as decided by the `determine_action` function.
     return match determine_action(&cr, in_desired_state) {
@@ -119,8 +119,8 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
                 &name, &namespace
             );
             // Invoke creation of a Kubernetes built-in resource named deployment with `n` CDBootstrap service pods.
-            CDBDeployment::apply(client.clone(), &name, &namespace, &cr).await?;
-            CDBNetworking::apply(client.clone(), &name, &namespace).await?;
+            Application::apply(client.clone(), &name, &namespace, &cr).await?;
+            Policy::apply(client.clone(), &name, &namespace, &cr).await?;
             status::patch(client, &name, &namespace, true).await?;
             Ok(Action::requeue(Duration::from_secs(20)))
         }
@@ -129,8 +129,8 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
                 "{} subresources in namespace {} are not in desired state",
                 &name, &namespace
             );
-            CDBDeployment::apply(client.clone(), &name, &namespace, &cr).await?;
-            CDBNetworking::apply(client.clone(), &name, &namespace).await?;
+            Application::apply(client.clone(), &name, &namespace, &cr).await?;
+            Policy::apply(client.clone(), &name, &namespace, &cr).await?;
             status::patch(client.clone(), &name, &namespace, true).await?;
             info!(
                 "Updated {} subresources in namespace {} to desired state",
@@ -149,8 +149,8 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
             // automatically converted into `Error` defined in this crate and the reconciliation is ended
             // with that error.
             // Note: A more advanced implementation would check for the Deployment's existence.
-            CDBDeployment::delete(client.clone(), &name, &namespace).await?;
-            CDBNetworking::delete(client.clone(), &name, &namespace).await?;
+            Application::delete(client.clone(), &name, &namespace).await?;
+            Policy::delete(client.clone(), &name, &namespace).await?;
             // Once the deployment is successfully removed, remove the finalizer to make it possible
             // for Kubernetes to delete the `CDBootstrap` resource.
             finalizer::delete(client, &name, &namespace).await?;

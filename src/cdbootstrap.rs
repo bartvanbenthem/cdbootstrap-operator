@@ -3,16 +3,16 @@ use k8s_openapi::api::core::v1::{Container, ContainerPort, PodSpec, PodTemplateS
 use k8s_openapi::api::networking::v1::NetworkPolicy;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
 use kube::api::{DeleteParams, ObjectMeta, PostParams};
-use kube::{Api, Client, Error};
+use kube::{Api, Client, Error, ResourceExt};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use tracing::*;
 
 use crate::crd::CDBootstrap;
 
-pub struct CDBDeployment {}
+pub struct Application {}
 
-impl CDBDeployment {
+impl Application {
     /// Deploys a new or updates an existing deployment of `n` pods with the `nginx:latest`,
     /// where `n` is the number of `replicas` given.
     ///
@@ -182,15 +182,38 @@ impl CDBDeployment {
     }
 }
 
-pub struct CDBNetworking {}
+pub struct Policy {}
 
-impl CDBNetworking {
+impl Policy {
     pub async fn apply(
         client: Client,
         name: &str,
         namespace: &str,
-    ) -> Result<NetworkPolicy, kube::Error> {
-        let labels: BTreeMap<String, String> = [("app".to_owned(), name.to_owned())]
+        cr: &CDBootstrap,
+    ) -> Result<NetworkPolicy, Error> {
+        // check for existing networkpolicy
+        let api: Api<NetworkPolicy> = Api::namespaced(client.clone(), namespace);
+
+        let precise_name = String::from("allow-egress-".to_owned() + name);
+
+        if let Ok(_) = api.get(&precise_name).await {
+            api.replace(
+                &precise_name,
+                &PostParams::default(),
+                &Policy::new(&precise_name, namespace, cr),
+            )
+            .await
+        } else {
+            api.create(
+                &PostParams::default(),
+                &Policy::new(&precise_name, namespace, cr),
+            )
+            .await
+        }
+    }
+
+    fn new(name: &str, namespace: &str, cr: &CDBootstrap) -> NetworkPolicy {
+        let labels: BTreeMap<String, String> = [("app".to_owned(), cr.name_any().to_owned())]
             .iter()
             .cloned()
             .collect();
@@ -207,7 +230,7 @@ impl CDBNetworking {
             "spec": {
                 "podSelector": {
                     "matchLabels": {
-                        "app": name,
+                        "app": cr.name_any().to_owned(),
                         // Add other labels as needed
                     }
                 },
@@ -261,55 +284,15 @@ impl CDBNetworking {
         let network_policy = match network_policy_result {
             Ok(network_policy) => network_policy,
             Err(err) => {
-                return Err(kube::Error::SerdeError(err));
+                error!(
+                    "Error creating network policy {} applying default",
+                    kube::Error::SerdeError(err)
+                );
+                let default_network_policy: NetworkPolicy = Default::default();
+                return default_network_policy;
             }
         };
-
-        // check for existing networkpolicy
-        let api: Api<NetworkPolicy> = Api::namespaced(client.clone(), namespace);
-        let existing_network = api.get(name).await;
-
-        match existing_network {
-            Ok(_) => {
-                let result = api
-                    .replace(name, &PostParams::default(), &network_policy)
-                    .await;
-                match result {
-                    Ok(network_policy) => {
-                        info!(
-                            "NetworkPolicy {} created successfully in namespace {}",
-                            name, namespace
-                        );
-                        Ok(network_policy)
-                    }
-                    Err(err) => {
-                        error!("Error creating NetworkPolicy: {:?}", err);
-                        Err(err)
-                    }
-                }
-            }
-            Err(_) => {
-                // Create or update the NetworkPolicy
-                let network_policy_api: Api<NetworkPolicy> =
-                    Api::namespaced(client.clone(), namespace);
-                let result = network_policy_api
-                    .create(&PostParams::default(), &network_policy)
-                    .await;
-                match result {
-                    Ok(network_policy) => {
-                        info!(
-                            "NetworkPolicy {} created successfully in namespace {}",
-                            name, namespace
-                        );
-                        Ok(network_policy)
-                    }
-                    Err(err) => {
-                        error!("Error creating NetworkPolicy: {:?}", err);
-                        Err(err)
-                    }
-                }
-            }
-        }
+        network_policy
     }
 
     /// Deletes an existing deployment.
@@ -321,8 +304,9 @@ impl CDBNetworking {
     ///
     /// Note: It is assumed the deployment exists for simplicity. Otherwise returns an Error.
     pub async fn delete(client: Client, name: &str, namespace: &str) -> Result<(), Error> {
+        let precise_name = String::from("allow-egress-".to_owned() + name);
         let api: Api<NetworkPolicy> = Api::namespaced(client, namespace);
-        api.delete(name, &DeleteParams::default()).await?;
+        api.delete(&precise_name, &DeleteParams::default()).await?;
         Ok(())
     }
 }
