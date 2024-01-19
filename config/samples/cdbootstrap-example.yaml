@@ -1,5 +1,5 @@
 # Example of bootstrap deployment. The operator will receive this specification and will create a deployment of two "bootstrap" pods.
-apiVersion: cnad.nl/v1beta1
+apiVersion: wasm.cloud/v1beta1
 kind: CDBootstrap # Identifier of the resource type.
 metadata:
   name: test-bootstrap # Name of the "bootstrap" custom resource instance, may be changed to your liking
