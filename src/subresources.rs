@@ -1,5 +1,5 @@
 use k8s_openapi::api::apps::v1::{Deployment, DeploymentSpec};
-use k8s_openapi::api::core::v1::{Container, ContainerPort, PodSpec, PodTemplateSpec};
+use k8s_openapi::api::core::v1::{ConfigMap, Container, ContainerPort, PodSpec, PodTemplateSpec};
 use k8s_openapi::api::networking::v1::NetworkPolicy;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
 use kube::api::{DeleteParams, ObjectMeta, PostParams};
@@ -182,9 +182,101 @@ impl Agent {
     }
 }
 
-pub struct Policy {}
+pub struct AgentConfig {}
 
-impl Policy {
+impl AgentConfig {
+    pub async fn apply(
+        client: Client,
+        name: &str,
+        namespace: &str,
+        cr: &CDBootstrap,
+    ) -> Result<ConfigMap, Error> {
+        // check for existing ConfigMap
+        let api: Api<ConfigMap> = Api::namespaced(client.clone(), namespace);
+
+        if let Ok(_) = api.get(&name).await {
+            info!("ConfigMap {} found in namespace {}", name, namespace);
+            info!(
+                "Update ConfigMap {} in namespace {} to desired state",
+                name, namespace
+            );
+            api.replace(
+                &name,
+                &PostParams::default(),
+                &AgentConfig::new(&name, namespace, cr),
+            )
+            .await
+        } else {
+            info!("ConfigMap {} not found in namespace {}", name, namespace);
+            info!("Creating ConfigMap {} in namespace {}", name, namespace);
+            api.create(
+                &PostParams::default(),
+                &AgentConfig::new(&name, namespace, cr),
+            )
+            .await
+        }
+    }
+
+    fn new(name: &str, namespace: &str, cr: &CDBootstrap) -> ConfigMap {
+        let labels: BTreeMap<String, String> = [("app".to_owned(), cr.name_any().to_owned())]
+            .iter()
+            .cloned()
+            .collect();
+
+        // Define the NetworkPolicy configuration as JSON
+        let configmap_json: Value = json!({
+               "apiVersion": "v1",
+               "kind": "ConfigMap",
+               "metadata": {
+                "name": name,
+                "namespace": namespace,
+                "labels": labels,
+               },
+                "data": {
+                  "AZP_POOL": "placeholder",
+                  "AZP_URL": "placeholder",
+                  "AZP_WORK": "placeholder",
+                  "AZP_AGENT_NAME": "placeholder",
+                  "AGENT_MTU_VALUE": "placeholder"
+                }
+
+        });
+
+        // Convert the JSON to NetworkPolicy struct using serde
+        let configmap_result: Result<ConfigMap, serde_json::Error> =
+            serde_json::from_value(configmap_json);
+        let configmap = match configmap_result {
+            Ok(configmap) => configmap,
+            Err(err) => {
+                error!(
+                    "Error creating ConfigMap {} applying default",
+                    kube::Error::SerdeError(err)
+                );
+                let default_configmap: ConfigMap = Default::default();
+                return default_configmap;
+            }
+        };
+        configmap
+    }
+
+    /// Deletes an existing ConfigMap.
+    ///
+    /// # Arguments:
+    /// - `client` - A Kubernetes client to delete the ConfigMap with
+    /// - `name` - Name of the deployment to delete
+    /// - `namespace` - Namespace the existing ConfigMap resides in
+    ///
+    /// Note: It is assumed the deployment exists for simplicity. Otherwise returns an Error.
+    pub async fn delete(client: Client, name: &str, namespace: &str) -> Result<(), Error> {
+        let api: Api<ConfigMap> = Api::namespaced(client, namespace);
+        api.delete(&name, &DeleteParams::default()).await?;
+        Ok(())
+    }
+}
+
+pub struct AgentPolicy {}
+
+impl AgentPolicy {
     pub async fn apply(
         client: Client,
         name: &str,
@@ -205,7 +297,7 @@ impl Policy {
             api.replace(
                 &precise_name,
                 &PostParams::default(),
-                &Policy::new(&precise_name, namespace, cr),
+                &AgentPolicy::new(&precise_name, namespace, cr),
             )
             .await
         } else {
@@ -216,7 +308,7 @@ impl Policy {
             info!("Creating NetworkPolicy {} in namespace {}", name, namespace);
             api.create(
                 &PostParams::default(),
-                &Policy::new(&precise_name, namespace, cr),
+                &AgentPolicy::new(&precise_name, namespace, cr),
             )
             .await
         }
