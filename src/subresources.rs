@@ -10,9 +10,9 @@ use tracing::*;
 
 use crate::crd::CDBootstrap;
 
-pub struct Application {}
+pub struct Agent {}
 
-impl Application {
+impl Agent {
     /// Deploys a new or updates an existing deployment of `n` pods with the `nginx:latest`,
     /// where `n` is the number of `replicas` given.
     ///
@@ -197,6 +197,11 @@ impl Policy {
         let precise_name = String::from("allow-egress-".to_owned() + name);
 
         if let Ok(_) = api.get(&precise_name).await {
+            info!("NetworkPolicy {} found in namespace {}", name, namespace);
+            info!(
+                "Update NetworkPolicy {} in namespace {} to desired state",
+                name, namespace
+            );
             api.replace(
                 &precise_name,
                 &PostParams::default(),
@@ -204,6 +209,11 @@ impl Policy {
             )
             .await
         } else {
+            info!(
+                "NetworkPolicy {} not found in namespace {}",
+                name, namespace
+            );
+            info!("Creating NetworkPolicy {} in namespace {}", name, namespace);
             api.create(
                 &PostParams::default(),
                 &Policy::new(&precise_name, namespace, cr),
@@ -295,12 +305,12 @@ impl Policy {
         network_policy
     }
 
-    /// Deletes an existing deployment.
+    /// Deletes an existing NetworkPolicy.
     ///
     /// # Arguments:
-    /// - `client` - A Kubernetes client to delete the Deployment with
+    /// - `client` - A Kubernetes client to delete the NetworkPolicy with
     /// - `name` - Name of the deployment to delete
-    /// - `namespace` - Namespace the existing deployment resides in
+    /// - `namespace` - Namespace the existing NetworkPolicy resides in
     ///
     /// Note: It is assumed the deployment exists for simplicity. Otherwise returns an Error.
     pub async fn delete(client: Client, name: &str, namespace: &str) -> Result<(), Error> {
