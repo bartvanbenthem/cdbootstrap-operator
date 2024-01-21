@@ -1,6 +1,6 @@
 KUBECONFIG=~/.kube/k3s.yaml
 
-kubectl create -f config/crd/cdbootstraps.operators.cloud.yaml
+kubectl create -f config/crd/cdbootstraps.cndev.nl.yaml
 
 cargo fmt
 cargo run
