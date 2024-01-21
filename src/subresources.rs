@@ -1,5 +1,7 @@
 use k8s_openapi::api::apps::v1::{Deployment, DeploymentSpec};
-use k8s_openapi::api::core::v1::{ConfigMap, Container, ContainerPort, PodSpec, PodTemplateSpec};
+use k8s_openapi::api::core::v1::{
+    ConfigMap, Container, ContainerPort, PodSpec, PodTemplateSpec, Secret,
+};
 use k8s_openapi::api::networking::v1::NetworkPolicy;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
 use kube::api::{DeleteParams, ObjectMeta, PostParams};
@@ -269,6 +271,95 @@ impl AgentConfig {
     /// Note: It is assumed the deployment exists for simplicity. Otherwise returns an Error.
     pub async fn delete(client: Client, name: &str, namespace: &str) -> Result<(), Error> {
         let api: Api<ConfigMap> = Api::namespaced(client, namespace);
+        api.delete(&name, &DeleteParams::default()).await?;
+        Ok(())
+    }
+}
+
+pub struct AgentSecret {}
+
+impl AgentSecret {
+    pub async fn apply(
+        client: Client,
+        name: &str,
+        namespace: &str,
+        cr: &CDBootstrap,
+    ) -> Result<Secret, Error> {
+        // check for existing Secret
+        let api: Api<Secret> = Api::namespaced(client.clone(), namespace);
+
+        if let Ok(_) = api.get(&name).await {
+            info!("Secret {} found in namespace {}", name, namespace);
+            info!(
+                "Update Secret {} in namespace {} to desired state",
+                name, namespace
+            );
+            api.replace(
+                &name,
+                &PostParams::default(),
+                &AgentSecret::new(&name, namespace, cr),
+            )
+            .await
+        } else {
+            info!("Secret {} not found in namespace {}", name, namespace);
+            info!("Creating Secret {} in namespace {}", name, namespace);
+            api.create(
+                &PostParams::default(),
+                &AgentSecret::new(&name, namespace, cr),
+            )
+            .await
+        }
+    }
+
+    fn new(name: &str, namespace: &str, cr: &CDBootstrap) -> Secret {
+        let labels: BTreeMap<String, String> = [("app".to_owned(), cr.name_any().to_owned())]
+            .iter()
+            .cloned()
+            .collect();
+
+        let token = "cGxhY2Vob2xkZXIK";
+
+        // Define the NetworkPolicy configuration as JSON
+        let secret_json: Value = json!({
+               "apiVersion": "v1",
+               "kind": "Secret",
+               "metadata": {
+                "name": name,
+                "namespace": namespace,
+                "labels": labels,
+               },
+                "data": {
+                  "AZP_TOKEN": token,
+                }
+
+        });
+
+        // Convert the JSON to NetworkPolicy struct using serde
+        let secret_result: Result<Secret, serde_json::Error> = serde_json::from_value(secret_json);
+        let secret = match secret_result {
+            Ok(secret) => secret,
+            Err(err) => {
+                error!(
+                    "Error creating Secret {} applying default",
+                    kube::Error::SerdeError(err)
+                );
+                let default_secret: Secret = Default::default();
+                return default_secret;
+            }
+        };
+        secret
+    }
+
+    /// Deletes an existing Secret.
+    ///
+    /// # Arguments:
+    /// - `client` - A Kubernetes client to delete the Secret with
+    /// - `name` - Name of the deployment to delete
+    /// - `namespace` - Namespace the existing Secret resides in
+    ///
+    /// Note: It is assumed the deployment exists for simplicity. Otherwise returns an Error.
+    pub async fn delete(client: Client, name: &str, namespace: &str) -> Result<(), Error> {
+        let api: Api<Secret> = Api::namespaced(client, namespace);
         api.delete(&name, &DeleteParams::default()).await?;
         Ok(())
     }

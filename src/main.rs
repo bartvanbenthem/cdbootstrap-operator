@@ -4,7 +4,7 @@ mod status;
 mod subresources;
 
 use crate::crd::CDBootstrap;
-use crate::subresources::{Agent, AgentConfig, AgentPolicy};
+use crate::subresources::{Agent, AgentConfig, AgentPolicy, AgentSecret};
 
 use anyhow::Result;
 use futures::stream::StreamExt;
@@ -117,6 +117,7 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
                 &name, &namespace
             );
             // Invoke creation of a Kubernetes built-in resource named deployment with `n` CDBootstrap service pods.
+            AgentSecret::apply(client.clone(), &name, &namespace, &cr).await?;
             AgentConfig::apply(client.clone(), &name, &namespace, &cr).await?;
             AgentPolicy::apply(client.clone(), &name, &namespace, &cr).await?;
             Agent::apply(client.clone(), &name, &namespace, &cr).await?;
@@ -151,6 +152,7 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
             // Note: A more advanced implementation would check for the Deployment's existence.
             AgentPolicy::delete(client.clone(), &name, &namespace).await?;
             AgentConfig::delete(client.clone(), &name, &namespace).await?;
+            AgentSecret::delete(client.clone(), &name, &namespace).await?;
             Agent::delete(client.clone(), &name, &namespace).await?;
             // Once the deployment is successfully removed, remove the finalizer to make it possible
             // for Kubernetes to delete the `CDBootstrap` resource.
