@@ -19,8 +19,8 @@ impl Agent {
     /// where `n` is the number of `replicas` given.
     ///
     /// # Arguments
-    /// - `client` - A Kubernetes client to create/update the deployment with.
-    /// - `name` - Name of the deployment to be created/updated
+    /// - `client` - A Kubernetes client to create/update the Deployment with.
+    /// - `name` - Name of the Deployment to be created/updated
     /// - `replicas` - Number of pod replicas for the Deployment to contain
     /// - `namespace` - Namespace to create/update the Kubernetes Deployment in.
     pub async fn apply(
@@ -29,113 +29,118 @@ impl Agent {
         namespace: &str,
         cr: &CDBootstrap,
     ) -> Result<Deployment, Error> {
+        // check for existing Deployment
+        let api: Api<Deployment> = Api::namespaced(client.clone(), namespace);
+
+        if let Ok(_) = api.get(&name).await {
+            info!("Deployment {} found in namespace {}", name, namespace);
+            info!(
+                "Update Deployment {} in namespace {} to desired state",
+                name, namespace
+            );
+            api.replace(
+                &name,
+                &PostParams::default(),
+                &Agent::new(&name, namespace, cr),
+            )
+            .await
+        } else {
+            info!("Deployment {} not found in namespace {}", name, namespace);
+            info!("Creating Deployment {} in namespace {}", name, namespace);
+            api.create(&PostParams::default(), &Agent::new(&name, namespace, cr))
+                .await
+        }
+    }
+
+    fn new(name: &str, namespace: &str, cr: &CDBootstrap) -> Deployment {
+        let labels: BTreeMap<String, String> = [("app".to_owned(), cr.name_any().to_owned())]
+            .iter()
+            .cloned()
+            .collect();
+
         let image = String::from("ghcr.io/bartvanbenthem/azp-agent-alpine:latest");
 
-        let mut labels: BTreeMap<String, String> = BTreeMap::new();
-        labels.insert("app".to_owned(), name.to_owned());
-
-        // Fetch the existing deployment
-        let deployment_api: Api<Deployment> = Api::namespaced(client.clone(), namespace);
-        let existing_deployment = deployment_api.get(name).await;
-
-        // Create or update the deployment
-        match existing_deployment {
-            Ok(existing) => {
-                // Update the existing deployment
-                let updated_deployment: Deployment = Deployment {
-                    metadata: ObjectMeta {
-                        name: Some(name.to_owned()),
-                        namespace: Some(namespace.to_owned()),
-                        labels: Some(labels.clone()),
-                        ..ObjectMeta::default()
+        // Define the NetworkPolicy configuration as JSON
+        let deployment_json: Value = json!({
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "metadata": {
+                "name": name,
+                "namespace": namespace,
+                "labels": labels
+            },
+            "spec": {
+                "replicas": cr.spec.replicas,
+                "selector": {
+                    "matchLabels": {
+                        "app": "example"
+                    }
+                },
+                "template": {
+                    "metadata": {
+                        "labels": {
+                            "app": "example"
+                        }
                     },
-                    spec: Some(DeploymentSpec {
-                        replicas: Some(cr.spec.replicas),
-                        selector: LabelSelector {
-                            match_expressions: None,
-                            match_labels: Some(labels.clone()),
-                        },
-                        template: PodTemplateSpec {
-                            spec: Some(PodSpec {
-                                containers: vec![Container {
-                                    name: name.to_owned(),
-                                    image: Some(image.to_owned()),
-                                    ports: Some(vec![ContainerPort {
-                                        container_port: 8080,
-                                        ..ContainerPort::default()
-                                    }]),
-                                    ..Container::default()
-                                }],
-                                ..PodSpec::default()
-                            }),
-                            metadata: Some(ObjectMeta {
-                                labels: Some(labels),
-                                ..ObjectMeta::default()
-                            }),
-                        },
-                        ..DeploymentSpec::default()
-                    }),
-                    ..existing
-                };
-
-                // Update the deployment
-                deployment_api
-                    .replace(name, &PostParams::default(), &updated_deployment)
-                    .await
+                    "spec": {
+                        "containers": [
+                            {
+                                "name": name,
+                                "image": image.clone(),
+                                "env": [
+                                    {
+                                        "name": "AZP_TOKEN",
+                                        "valueFrom": {
+                                            "secretKeyRef": {
+                                                "name": name,
+                                                "key": "AZP_TOKEN",
+                                                "optional": true,
+                                            },
+                                        },
+                                    },
+                                    {
+                                        "name": "AZP_URL",
+                                        "valueFrom": {
+                                            "configMapKeyRef": {
+                                                "name": name,
+                                                "key": "AZP_URL",
+                                                "optional": true,
+                                            },
+                                        },
+                                    },
+                                    {
+                                        "name": "AZP_POOL",
+                                        "valueFrom": {
+                                            "configMapKeyRef": {
+                                                "name": name,
+                                                "key": "AZP_URL",
+                                                "optional": true,
+                                            },
+                                        },
+                                    },
+                                ]
+                            }
+                        ]
+                    }
+                }
             }
-            Err(_) => {
-                // Create a new deployment
-                info!(
-                    "Deployment {:?} in namespace {} does not exisist, creating new deployment",
-                    &name, &namespace
+        });
+
+        // Convert the JSON to Deployment struct using serde
+        let deployment_result: Result<Deployment, serde_json::Error> =
+            serde_json::from_value(deployment_json);
+        let deployment = match deployment_result {
+            Ok(deployment) => deployment,
+            Err(err) => {
+                error!(
+                    "Error creating Deployment {} applying default",
+                    kube::Error::SerdeError(err)
                 );
-                let mut labels: BTreeMap<String, String> = BTreeMap::new();
-                labels.insert("app".to_owned(), name.to_owned());
-
-                // Definition of the deployment. Alternatively, a YAML representation could be used as well.
-                let deployment: Deployment = Deployment {
-                    metadata: ObjectMeta {
-                        name: Some(name.to_owned()),
-                        namespace: Some(namespace.to_owned()),
-                        labels: Some(labels.clone()),
-                        ..ObjectMeta::default()
-                    },
-                    spec: Some(DeploymentSpec {
-                        replicas: Some(cr.spec.replicas),
-                        selector: LabelSelector {
-                            match_expressions: None,
-                            match_labels: Some(labels.clone()),
-                        },
-                        template: PodTemplateSpec {
-                            spec: Some(PodSpec {
-                                containers: vec![Container {
-                                    name: name.to_owned(),
-                                    image: Some(image.to_owned()),
-                                    ports: Some(vec![ContainerPort {
-                                        container_port: 8080,
-                                        ..ContainerPort::default()
-                                    }]),
-                                    ..Container::default()
-                                }],
-                                ..PodSpec::default()
-                            }),
-                            metadata: Some(ObjectMeta {
-                                labels: Some(labels),
-                                ..ObjectMeta::default()
-                            }),
-                        },
-                        ..DeploymentSpec::default()
-                    }),
-                    ..Deployment::default()
-                };
-
-                // Create the deployment defined above
-                let deployment_api: Api<Deployment> = Api::namespaced(client, namespace);
-                deployment_api
-                    .create(&PostParams::default(), &deployment)
-                    .await
+                let default_deployment: Deployment = Default::default();
+                return default_deployment;
             }
-        }
+        };
+        deployment
     }
 
     /// Deletes an existing deployment.
@@ -501,5 +506,124 @@ impl AgentPolicy {
         let api: Api<NetworkPolicy> = Api::namespaced(client, namespace);
         api.delete(&precise_name, &DeleteParams::default()).await?;
         Ok(())
+    }
+}
+
+////////////////////////////////////////////////////
+/// NOT USED
+
+#[allow(dead_code)]
+pub async fn apply_old(
+    client: Client,
+    name: &str,
+    namespace: &str,
+    cr: &CDBootstrap,
+) -> Result<Deployment, Error> {
+    let image = String::from("ghcr.io/bartvanbenthem/azp-agent-alpine:latest");
+
+    let mut labels: BTreeMap<String, String> = BTreeMap::new();
+    labels.insert("app".to_owned(), name.to_owned());
+
+    // Fetch the existing deployment
+    let deployment_api: Api<Deployment> = Api::namespaced(client.clone(), namespace);
+    let existing_deployment = deployment_api.get(name).await;
+
+    // Create or update the deployment
+    match existing_deployment {
+        Ok(existing) => {
+            // Update the existing deployment
+            let updated_deployment: Deployment = Deployment {
+                metadata: ObjectMeta {
+                    name: Some(name.to_owned()),
+                    namespace: Some(namespace.to_owned()),
+                    labels: Some(labels.clone()),
+                    ..ObjectMeta::default()
+                },
+                spec: Some(DeploymentSpec {
+                    replicas: Some(cr.spec.replicas),
+                    selector: LabelSelector {
+                        match_expressions: None,
+                        match_labels: Some(labels.clone()),
+                    },
+                    template: PodTemplateSpec {
+                        spec: Some(PodSpec {
+                            containers: vec![Container {
+                                name: name.to_owned(),
+                                image: Some(image.to_owned()),
+                                ports: Some(vec![ContainerPort {
+                                    container_port: 8080,
+                                    ..ContainerPort::default()
+                                }]),
+                                ..Container::default()
+                            }],
+                            ..PodSpec::default()
+                        }),
+                        metadata: Some(ObjectMeta {
+                            labels: Some(labels),
+                            ..ObjectMeta::default()
+                        }),
+                    },
+                    ..DeploymentSpec::default()
+                }),
+                ..existing
+            };
+
+            // Update the deployment
+            deployment_api
+                .replace(name, &PostParams::default(), &updated_deployment)
+                .await
+        }
+        Err(_) => {
+            // Create a new deployment
+            info!(
+                "Deployment {:?} in namespace {} does not exisist, creating new deployment",
+                &name, &namespace
+            );
+            let mut labels: BTreeMap<String, String> = BTreeMap::new();
+            labels.insert("app".to_owned(), name.to_owned());
+
+            // Definition of the deployment. Alternatively, a YAML representation could be used as well.
+            let deployment: Deployment = Deployment {
+                metadata: ObjectMeta {
+                    name: Some(name.to_owned()),
+                    namespace: Some(namespace.to_owned()),
+                    labels: Some(labels.clone()),
+                    ..ObjectMeta::default()
+                },
+                spec: Some(DeploymentSpec {
+                    replicas: Some(cr.spec.replicas),
+                    selector: LabelSelector {
+                        match_expressions: None,
+                        match_labels: Some(labels.clone()),
+                    },
+                    template: PodTemplateSpec {
+                        spec: Some(PodSpec {
+                            containers: vec![Container {
+                                name: name.to_owned(),
+                                image: Some(image.to_owned()),
+                                ports: Some(vec![ContainerPort {
+                                    container_port: 8080,
+                                    ..ContainerPort::default()
+                                }]),
+                                ..Container::default()
+                            }],
+                            ..PodSpec::default()
+                        }),
+                        metadata: Some(ObjectMeta {
+                            labels: Some(labels),
+                            ..ObjectMeta::default()
+                        }),
+                    },
+                    ..DeploymentSpec::default()
+                }),
+                ..Deployment::default()
+            };
+
+            // Create the deployment defined above
+            let deployment_api: Api<Deployment> = Api::namespaced(client, namespace);
+            deployment_api
+                .create(&PostParams::default(), &deployment)
+                .await
+        }
     }
 }
