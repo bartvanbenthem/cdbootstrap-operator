@@ -5,4 +5,6 @@ metadata:
   name: test-bootstrap # Name of the "bootstrap" custom resource instance, may be changed to your liking
   #namespace: default # Namespace must exist and account in KUBECONFIG must have sufficient permissions
 spec:
+  url: https://dev.azure.com/DevOps-SST
+  pool: poc-pool
   replicas: 2 # Number of "bootstrap" pods created.

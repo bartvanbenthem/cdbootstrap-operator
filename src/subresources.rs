@@ -230,6 +230,9 @@ impl AgentConfig {
             .cloned()
             .collect();
 
+        let url = cr.spec.url.clone();
+        let pool = cr.spec.pool.clone();
+
         // Define the NetworkPolicy configuration as JSON
         let configmap_json: Value = json!({
                "apiVersion": "v1",
@@ -240,8 +243,8 @@ impl AgentConfig {
                 "labels": labels,
                },
                 "data": {
-                  "AZP_POOL": "placeholder",
-                  "AZP_URL": "placeholder",
+                  "AZP_POOL": pool,
+                  "AZP_URL": url,
                   "AZP_WORK": "placeholder",
                   "AZP_AGENT_NAME": "placeholder",
                   "AGENT_MTU_VALUE": "placeholder"

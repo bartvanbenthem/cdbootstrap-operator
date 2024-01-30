@@ -18,6 +18,10 @@ use serde::{Deserialize, Serialize};
 pub struct CDBootstrapSpec {
     #[garde(skip)]
     pub replicas: i32,
+    #[garde(skip)]
+    pub url: String,
+    #[garde(skip)]
+    pub pool: String,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, Default, JsonSchema)]

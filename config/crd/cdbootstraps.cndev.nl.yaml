@@ -36,8 +36,16 @@ spec:
                 replicas:
                   type: integer
                   format: int32
+                url:
+                  type: string
+                  format: string
+                pool:
+                  type: string
+                  format: string
               required:
                 - replicas
+                - pool
+                - url
             status:
               type: object
               properties:
