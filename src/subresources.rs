@@ -113,7 +113,7 @@ impl Agent {
                                         "valueFrom": {
                                             "configMapKeyRef": {
                                                 "name": name,
-                                                "key": "AZP_URL",
+                                                "key": "AZP_POOL",
                                                 "optional": true,
                                             },
                                         },
