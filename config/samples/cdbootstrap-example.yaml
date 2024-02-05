@@ -9,6 +9,6 @@ spec:
   pool: poc-pool
   replicas: 2 # Number of "bootstrap" pods created.
   keyvault: https://kmcs-p-weu-prd.vault.azure.net/
-  spn: kmcs-dev-r
+  spn: '69f74670-5cf9-4cfe-b795-8dc3a6cc975f'
   subscription: '8da683ba-7272-4806-96c0-88972f8f04dd'
   tenant: '0baeb517-c6ec-4d6c-a394-96a5affa5ada'
