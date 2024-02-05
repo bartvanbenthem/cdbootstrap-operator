@@ -335,7 +335,7 @@ impl AgentSecret {
             .cloned()
             .collect();
 
-        let token = "cGxhY2Vob2xkZXIK";
+        let placeholder_token = "cGxhY2Vob2xkZXIK";
 
         // Define the NetworkPolicy configuration as JSON
         let secret_json: Value = json!({
@@ -347,8 +347,8 @@ impl AgentSecret {
                 "labels": labels,
                },
                 "data": {
-                  "AZP_TOKEN": token,
-                  "SPN_SECRET": token,
+                  "AZP_TOKEN": placeholder_token,
+                  "SPN_SECRET": placeholder_token,
                 }
 
         });
