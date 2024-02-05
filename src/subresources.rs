@@ -255,9 +255,9 @@ impl AgentConfig {
                 "data": {
                   "AZP_POOL": pool,
                   "AZP_URL": url,
-                  "AZP_WORK": "placeholder",
-                  "AZP_AGENT_NAME": "placeholder",
-                  "AGENT_MTU_VALUE": "placeholder"
+                  //"AZP_WORK": "placeholder",
+                  //"AZP_AGENT_NAME": "placeholder",
+                  //"AGENT_MTU_VALUE": "placeholder"
                 }
 
         });
