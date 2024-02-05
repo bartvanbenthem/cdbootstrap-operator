@@ -45,6 +45,15 @@ spec:
                 keyvault:
                   type: string
                   format: string
+                spn:
+                  type: string
+                  format: string
+                subscription:
+                  type: string
+                  format: string
+                tenant:
+                  type: string
+                  format: string
               required:
                 - replicas
                 - pool

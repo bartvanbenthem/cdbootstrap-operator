@@ -8,4 +8,7 @@ spec:
   url: https://dev.azure.com/DevOps-SST
   pool: poc-pool
   replicas: 4 # Number of "bootstrap" pods created.
-  keyvault: https://<name>.vault.azure.net/
+  keyvault: https://kmcs-p-weu-prd.vault.azure.net/
+  spn: kmcs-dev-r
+  subscription: '8da683ba-7272-4806-96c0-88972f8f04dd'
+  tenant: '0baeb517-c6ec-4d6c-a394-96a5affa5ada'

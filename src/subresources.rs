@@ -99,6 +99,16 @@ impl Agent {
                                         },
                                     },
                                     {
+                                        "name": "SPN_SECRET",
+                                        "valueFrom": {
+                                            "secretKeyRef": {
+                                                "name": name,
+                                                "key": "SPN_SECRET",
+                                                "optional": true,
+                                            },
+                                        },
+                                    },
+                                    {
                                         "name": "AZP_URL",
                                         "valueFrom": {
                                             "configMapKeyRef": {
@@ -338,6 +348,7 @@ impl AgentSecret {
                },
                 "data": {
                   "AZP_TOKEN": token,
+                  "SPN_SECRET": token,
                 }
 
         });
