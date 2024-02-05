@@ -8,3 +8,4 @@ spec:
   url: https://dev.azure.com/DevOps-SST
   pool: poc-pool
   replicas: 2 # Number of "bootstrap" pods created.
+  keyvault: https://<name>.vault.azure.net/

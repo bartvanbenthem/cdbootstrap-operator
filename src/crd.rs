@@ -22,6 +22,8 @@ pub struct CDBootstrapSpec {
     pub url: String,
     #[garde(skip)]
     pub pool: String,
+    #[garde(skip)]
+    pub keyvault: String,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, Default, JsonSchema)]
