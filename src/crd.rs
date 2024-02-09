@@ -27,8 +27,6 @@ pub struct CDBootstrapSpec {
     #[garde(skip)]
     pub spn: String,
     #[garde(skip)]
-    pub subscription: String,
-    #[garde(skip)]
     pub tenant: String,
 }
 
