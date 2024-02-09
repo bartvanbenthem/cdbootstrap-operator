@@ -27,3 +27,6 @@ garde = { version = "0.16.1", default-features = false, features = ["derive"] }
 anyhow = "1.0.44"
 tracing = "0.1.36"
 tracing-subscriber = "0.3.3"
+azure_core = "0.13.0"
+azure_identity = "0.13.0"
+azure_security_keyvault = "0.13.0"

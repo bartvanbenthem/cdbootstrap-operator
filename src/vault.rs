@@ -1,56 +1,65 @@
 use azure_core::new_http_client;
-use azure_identity::{
-    ClientSecretCredential, TokenCredentialOptions,
-};
+use azure_identity::{ClientSecretCredential, TokenCredentialOptions};
 use azure_security_keyvault::prelude::*;
 use std::{env, process, sync::Arc};
-use tokio_stream::StreamExt;
+
+use kube::Client;
+
+use crate::crd::CDBootstrap;
 
 #[derive(Debug)]
-struct Config {
+struct Azure {
     tenant: String,
     keyvault_url: String,
     spn: String,
 }
 
-async fn read_secret() {
-    let config = Config {
-        tenant: env::var("TENANT").unwrap(),
-        keyvault_url: env::var("KEYVAULT_URL").unwrap(),
-        spn: env::var("SPN").unwrap(),
-    };
+impl Azure {
+    #[allow(dead_code)]
+    pub async fn print_secret(client: Client, name: &str, namespace: &str, cr: &CDBootstrap) {
+        // mitigate warnings
+        let _ = client;
+        let _ = name;
+        let _ = namespace;
 
-    let spn_secret: String = env::var("SPN_SECRET").unwrap();
-    let secret_name = "default";
+        let config = Azure {
+            tenant: cr.spec.tenant.clone(),
+            keyvault_url: cr.spec.keyvault.clone(),
+            spn: cr.spec.spn.clone(),
+        };
 
-    let creds = Arc::new(ClientSecretCredential::new(
-        new_http_client(),
-        config.tenant,
-        config.spn,
-        spn_secret,
-        TokenCredentialOptions::default(),
-    ));
+        let spn_secret: String = env::var("SPN_SECRET").unwrap();
+        let secret_name = "default";
 
-    let client_result = SecretClient::new(&config.keyvault_url, creds);
-    let client = match client_result {
-        Ok(client) => client,
-        Err(error) => {
-            eprintln!("Error creating new Azure Secret CLient {}", error);
-            process::exit(1)
-        }
-    };
+        let creds = Arc::new(ClientSecretCredential::new(
+            new_http_client(),
+            config.tenant,
+            config.spn,
+            spn_secret,
+            TokenCredentialOptions::default(),
+        ));
 
-    if secret_name.len() > 0 {
-        let secret_result = client.clone().get(secret_name).await;
-
-        let value = match secret_result {
-            Ok(s) => s.value,
+        let client_result = SecretClient::new(&config.keyvault_url, creds);
+        let client = match client_result {
+            Ok(client) => client,
             Err(error) => {
-                eprintln!("Error getting Azure Secrets from Client {}", error);
-                process::exit(1);
+                eprintln!("Error creating new Azure Secret CLient {}", error);
+                process::exit(1)
             }
         };
 
-        println!("{:?}", value);
+        if secret_name.len() > 0 {
+            let secret_result = client.clone().get(secret_name).await;
+
+            let value = match secret_result {
+                Ok(s) => s.value,
+                Err(error) => {
+                    eprintln!("Error getting Azure Secrets from Client {}", error);
+                    process::exit(1);
+                }
+            };
+
+            println!("{:?}", value);
+        }
     }
 }

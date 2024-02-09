@@ -2,6 +2,7 @@ pub mod crd;
 mod finalizer;
 mod status;
 mod subresources;
+mod vault;
 
 use crate::crd::CDBootstrap;
 use crate::subresources::{Agent, AgentConfig, AgentPolicy, AgentSecret};
