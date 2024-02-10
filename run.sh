@@ -3,6 +3,7 @@ KUBECONFIG=~/.kube/k3s.yaml
 kubectl create -f config/crd/cdbootstraps.cndev.nl.yaml
 
 cargo fmt
+cargo test
 cargo run
 
 # kubectl apply -f config/samples/cdbootstrap-example.yaml
