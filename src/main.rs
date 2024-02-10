@@ -1,11 +1,7 @@
-pub mod crd;
-mod finalizer;
-mod status;
-mod subresources;
-mod vault;
-
-use crate::crd::CDBootstrap;
-use crate::subresources::{Agent, AgentConfig, AgentPolicy, AgentSecret};
+use cdbootstrap::crd::CDBootstrap;
+use cdbootstrap::finalizer;
+use cdbootstrap::status;
+use cdbootstrap::subresources::{Agent, AgentConfig, AgentPolicy, AgentSecret};
 
 use anyhow::Result;
 use futures::stream::StreamExt;
