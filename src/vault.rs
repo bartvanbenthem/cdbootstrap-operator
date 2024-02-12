@@ -35,7 +35,7 @@ impl Azure {
             spn: az.spn.clone(),
         };
 
-        let spn_secret: String = env::var("SPN_SECRET").unwrap();
+        let spn_secret: String = env::var("SPN_SECRET").unwrap_or("none".to_string());
 
         let creds = Arc::new(ClientSecretCredential::new(
             new_http_client(),
@@ -65,7 +65,7 @@ impl Azure {
                 }
             };
 
-            println!("{:?}", value);
+            println!("\nvalue from keyvault: {}\n", value);
         }
     }
 }
