@@ -8,28 +8,34 @@ use kube::Client;
 use crate::crd::CDBootstrap;
 
 #[derive(Debug)]
-struct Azure {
-    tenant: String,
-    keyvault_url: String,
-    spn: String,
+pub struct Azure {
+    pub tenant: String,
+    pub keyvault_url: String,
+    pub spn: String,
 }
 
 impl Azure {
     #[allow(dead_code)]
-    pub async fn print_secret(client: Client, name: &str, namespace: &str, cr: &CDBootstrap) {
-        // mitigate warnings
-        let _ = client;
-        let _ = name;
-        let _ = namespace;
+    pub fn new(tenant: &str, keyvault_url: &str, spn: &str) -> Self {
+        Self {
+            tenant: tenant.to_string(),
+            keyvault_url: keyvault_url.to_string(),
+            spn: spn.to_string(),
+        }
+    }
 
+    #[allow(dead_code, unused_variables)]
+    pub async fn get_secret(client: Client, name: &str, namespace: &str, cr: &CDBootstrap) {}
+
+    #[allow(dead_code)]
+    pub async fn print_secret(az: &Azure, secret_name: &str) {
         let config = Azure {
-            tenant: cr.spec.tenant.clone(),
-            keyvault_url: cr.spec.keyvault.clone(),
-            spn: cr.spec.spn.clone(),
+            tenant: az.tenant.clone(),
+            keyvault_url: az.keyvault_url.clone(),
+            spn: az.spn.clone(),
         };
 
         let spn_secret: String = env::var("SPN_SECRET").unwrap();
-        let secret_name = "default";
 
         let creds = Arc::new(ClientSecretCredential::new(
             new_http_client(),
