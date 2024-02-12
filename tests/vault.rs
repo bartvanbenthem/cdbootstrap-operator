@@ -6,10 +6,8 @@ async fn print_secret_works() {
     let tenant = env::var("TENANT").unwrap();
     let keyvault_url = env::var("KEYVAULT_URL").unwrap();
     let spn = env::var("SPN").unwrap();
-
-    let secret_name = "default";
+    let secret_name = env::var("SECRET_NAME").unwrap();
 
     let azure = Azure::new(&tenant, &keyvault_url, &spn);
-
-    Azure::print_secret(&azure, secret_name).await;
+    Azure::print_secret(&azure, &secret_name).await;
 }
