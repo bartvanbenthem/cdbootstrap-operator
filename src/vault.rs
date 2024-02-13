@@ -1,9 +1,10 @@
 use azure_core::new_http_client;
 use azure_identity::{ClientSecretCredential, TokenCredentialOptions};
 use azure_security_keyvault::prelude::*;
+use k8s_openapi::api::core::v1::Secret;
 use std::{env, process, sync::Arc};
 
-use kube::Client;
+use kube::{Api, Client};
 
 use crate::crd::CDBootstrap;
 
@@ -25,7 +26,17 @@ impl Azure {
     }
 
     #[allow(dead_code, unused_variables)]
-    pub async fn get_secret(client: Client, name: &str, namespace: &str, cr: &CDBootstrap) {}
+    pub async fn get_secret(client: Client, name: &str, namespace: &str, cr: &CDBootstrap) {
+        let api: Api<Secret> = Api::namespaced(client.clone(), namespace);
+
+        if let Ok(_) = api.get(name).await {
+            // code
+            println!("Found secret")
+        } else {
+            //code
+            println!("Secret not found")
+        }
+    }
 
     #[allow(dead_code)]
     pub async fn print_secret(az: &Azure, secret_name: &str) {

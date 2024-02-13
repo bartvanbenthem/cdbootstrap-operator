@@ -32,22 +32,22 @@ impl Agent {
         // check for existing Deployment
         let api: Api<Deployment> = Api::namespaced(client.clone(), namespace);
 
-        if let Ok(_) = api.get(&name).await {
+        if let Ok(_) = api.get(name).await {
             info!("Deployment {} found in namespace {}", name, namespace);
             info!(
                 "Update Deployment {} in namespace {} to desired state",
                 name, namespace
             );
             api.replace(
-                &name,
+                name,
                 &PostParams::default(),
-                &Agent::new(&name, namespace, cr),
+                &Agent::new(name, namespace, cr),
             )
             .await
         } else {
             info!("Deployment {} not found in namespace {}", name, namespace);
             info!("Creating Deployment {} in namespace {}", name, namespace);
-            api.create(&PostParams::default(), &Agent::new(&name, namespace, cr))
+            api.create(&PostParams::default(), &Agent::new(name, namespace, cr))
                 .await
         }
     }
@@ -181,7 +181,7 @@ impl Agent {
             Ok(existing_deployment) => existing_deployment,
             Err(_) => {
                 // Handle the case when the deployment is not found
-                info!("Not able to find the existing {} deployment", &name);
+                info!("Not able to find the existing {} deployment", name);
                 return Ok(false);
             }
         };
@@ -218,9 +218,9 @@ impl AgentConfig {
                 name, namespace
             );
             api.replace(
-                &name,
+                name,
                 &PostParams::default(),
-                &AgentConfig::new(&name, namespace, cr),
+                &AgentConfig::new(name, namespace, cr),
             )
             .await
         } else {
@@ -228,7 +228,7 @@ impl AgentConfig {
             info!("Creating ConfigMap {} in namespace {}", name, namespace);
             api.create(
                 &PostParams::default(),
-                &AgentConfig::new(&name, namespace, cr),
+                &AgentConfig::new(name, namespace, cr),
             )
             .await
         }
@@ -306,16 +306,16 @@ impl AgentSecret {
         // check for existing Secret
         let api: Api<Secret> = Api::namespaced(client.clone(), namespace);
 
-        if let Ok(_) = api.get(&name).await {
+        if let Ok(_) = api.get(name).await {
             info!("Secret {} found in namespace {}", name, namespace);
             info!(
                 "Update Secret {} in namespace {} to desired state",
                 name, namespace
             );
             api.replace(
-                &name,
+                name,
                 &PostParams::default(),
-                &AgentSecret::new(&name, namespace, cr),
+                &AgentSecret::new(name, namespace, cr),
             )
             .await
         } else {
@@ -323,7 +323,7 @@ impl AgentSecret {
             info!("Creating Secret {} in namespace {}", name, namespace);
             api.create(
                 &PostParams::default(),
-                &AgentSecret::new(&name, namespace, cr),
+                &AgentSecret::new(name, namespace, cr),
             )
             .await
         }
