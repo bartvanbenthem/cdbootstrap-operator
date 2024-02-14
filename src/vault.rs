@@ -94,7 +94,7 @@ async fn secret_value_is_set(client: Client, name: &str, namespace: &str, key: &
         let data = secret.data.unwrap();
         if let Some(value) = data.get(key) {
             let token_decoded = from_utf8(&value.0).unwrap_or("unable to decode Secret value");
-            //println!("Found secret data !!!!!!!!! {:?}",token_decoded.replace("\n", ""));
+            //println!("Found secret data: {:?}",token_decoded.replace("\n", ""));
             if token_decoded == "" {
                 info!(
                     "{} Secret {} in namespace {} has NOT been set or collected",
