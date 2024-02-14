@@ -2,6 +2,7 @@ use cdbootstrap::crd::CDBootstrap;
 use cdbootstrap::finalizer;
 use cdbootstrap::status;
 use cdbootstrap::subresources::{Agent, AgentConfig, AgentPolicy, AgentSecret};
+use cdbootstrap::vault::*;
 
 use anyhow::Result;
 use futures::stream::StreamExt;
@@ -158,7 +159,9 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
         }
         // The resource is already in desired state, do nothing and re-check after 10 seconds
         CDBootstrapAction::NoOp => {
-            status::print(client, &name, &namespace).await?;
+            status::print(client.clone(), &name, &namespace).await?;
+            //temp check azure vault functions
+            run(client, &name, &namespace).await;
             Ok(Action::requeue(Duration::from_secs(60)))
         }
     };
