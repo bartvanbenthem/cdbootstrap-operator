@@ -29,9 +29,12 @@ pub async fn print(client: Client, name: &String, namespace: &String) -> Result<
     let cdb = api.get_status(name).await?;
 
     info!(
-        "Got status {:?} for custom resource {} in namespace {}",
-        &cdb.status,
-        &cdb.name_any(),
+        "Got status succeeded {:?} for custom resource {} in namespace {}",
+        cdb.clone()
+            .status
+            .unwrap_or(CDBootstrapStatus { succeeded: false })
+            .succeeded,
+        cdb.name_any(),
         namespace
     );
 
