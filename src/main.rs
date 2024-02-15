@@ -161,7 +161,7 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
         CDBootstrapAction::NoOp => {
             status::print(client.clone(), &name, &namespace).await?;
             //temp check azure vault functions
-            run(client, &name, &namespace).await;
+            run(client, &name, &namespace, &cr).await;
             Ok(Action::requeue(Duration::from_secs(60)))
         }
     };

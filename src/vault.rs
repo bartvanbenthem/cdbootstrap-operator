@@ -1,11 +1,14 @@
 use azure_core::new_http_client;
 use azure_identity::{ClientSecretCredential, TokenCredentialOptions};
 use azure_security_keyvault::prelude::*;
+use futures::StreamExt;
 use k8s_openapi::api::core::v1::Secret;
 use kube::{Api, Client};
 use std::str::{from_utf8, Utf8Error};
 use std::{env, process, sync::Arc};
 use tracing::{error, info};
+
+use crate::crd::CDBootstrap;
 
 #[derive(Debug)]
 pub struct AzureVault {
@@ -25,15 +28,42 @@ impl AzureVault {
     }
 
     // test the connection en authentication to the azure keyvault
-    pub async fn test_connection() {}
+    pub async fn test_connection(az: &AzureVault) {
+        let spn_secret: String = env::var("SPN_SECRET").unwrap_or("none".to_string());
+
+        let creds = Arc::new(ClientSecretCredential::new(
+            new_http_client(),
+            az.tenant.clone(),
+            az.spn.clone(),
+            spn_secret,
+            TokenCredentialOptions::default(),
+        ));
+
+        let client_result = SecretClient::new(&az.url, creds);
+        let client = match client_result {
+            Ok(client) => client,
+            Err(error) => {
+                eprintln!("Error creating new Azure Secret CLient {}", error);
+                process::exit(1)
+            }
+        };
+
+        let secret_result = client.clone().list_secrets().into_stream().next().await;
+
+        match secret_result.map(|result| result.map(|_| ())) {
+            Some(Ok(())) => info!("Connection to Azure KeyVault is Successful"),
+            Some(Err(error)) => eprintln!("Error connecting to Azure KeyVault: {}", error),
+            None => eprintln!("Unexpected None value in secret_result"),
+        }
+    }
 }
 
-pub async fn run(client: Client, name: &str, namespace: &str) {
+pub async fn run(client: Client, name: &str, namespace: &str, cr: &CDBootstrap) {
     let sps_result = secret_value_is_set(client.clone(), &name, &namespace, "SPN_SECRET").await;
     let sps = match sps_result {
         Ok(sps) => sps,
         Err(err) => {
-            error!("Error checking SPN_SECRET: {:?}", err);
+            error!("{:?}", err);
             false
         }
     };
@@ -42,7 +72,7 @@ pub async fn run(client: Client, name: &str, namespace: &str) {
     let azp = match azp_result {
         Ok(azp) => azp,
         Err(err) => {
-            error!("Error checking SPN_SECRET: {:?}", err);
+            error!("{:?}", err);
             false
         }
     };
@@ -55,7 +85,9 @@ pub async fn run(client: Client, name: &str, namespace: &str) {
     if sps == true && azp == false {
         info!("SPN_SECRET value in Namespace {} Has been set", namespace);
         info!("Testing authentication to the Vault");
-        AzureVault::test_connection().await;
+
+        let azure_vault = AzureVault::new(&cr.spec.tenant, &cr.spec.keyvault, &cr.spec.spn);
+        AzureVault::test_connection(&azure_vault).await;
     }
 
     if azp == true {
