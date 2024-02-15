@@ -3,7 +3,7 @@ use azure_identity::{ClientSecretCredential, TokenCredentialOptions};
 use azure_security_keyvault::prelude::*;
 use k8s_openapi::api::core::v1::Secret;
 use kube::{Api, Client};
-use std::str::from_utf8;
+use std::str::{from_utf8, Utf8Error};
 use std::{env, process, sync::Arc};
 use tracing::{error, info};
 
@@ -29,8 +29,24 @@ impl AzureVault {
 }
 
 pub async fn run(client: Client, name: &str, namespace: &str) {
-    let sps = secret_value_is_set(client.clone(), &name, &namespace, "SPN_SECRET").await;
-    let azp = secret_value_is_set(client.clone(), &name, &namespace, "AZP_TOKEN").await;
+    let sps_result = secret_value_is_set(client.clone(), &name, &namespace, "SPN_SECRET").await;
+    let sps = match sps_result {
+        Ok(sps) => sps,
+        Err(err) => {
+            error!("Error checking SPN_SECRET: {:?}", err);
+            false
+        }
+    };
+
+    let azp_result = secret_value_is_set(client.clone(), &name, &namespace, "AZP_TOKEN").await;
+    let azp = match azp_result {
+        Ok(azp) => azp,
+        Err(err) => {
+            error!("Error checking SPN_SECRET: {:?}", err);
+            false
+        }
+    };
+
     if azp == false && sps == false {
         info!("Make sure to inject the AZP_TOKEN in Namespace {}, or set the SPN_SECRET to collect a Token from the Vault",
         namespace);
@@ -48,25 +64,30 @@ pub async fn run(client: Client, name: &str, namespace: &str) {
     }
 }
 
-async fn secret_value_is_set(client: Client, name: &str, namespace: &str, key: &str) -> bool {
+async fn secret_value_is_set(
+    client: Client,
+    name: &str,
+    namespace: &str,
+    key: &str,
+) -> Result<bool, Utf8Error> {
     let mut is_set = false;
     let api: Api<Secret> = Api::namespaced(client.clone(), namespace);
-    if let Ok(secret) = api.get(name).await {
-        let data = secret.data.unwrap();
-        if let Some(value) = data.get(key) {
-            let token_decoded = from_utf8(&value.0).unwrap_or("unable to decode Secret value");
-            //println!("Found secret data: {:?}",token_decoded.replace("\n", ""));
-            if token_decoded == "" {
-                is_set = false;
-            } else {
-                is_set = true;
+
+    match api.get(name).await {
+        Ok(secret) => {
+            if let Some(data) = secret.data {
+                if let Some(value) = data.get(key) {
+                    let token_decoded = from_utf8(&value.0)?;
+                    is_set = !token_decoded.is_empty();
+                }
             }
         }
-        is_set
-    } else {
-        error!("Secret {} in namespace {} NOT found", name, namespace);
-        is_set
+        Err(_) => {
+            error!("Secret {} in namespace {} NOT found", name, namespace);
+        }
     }
+
+    Ok(is_set)
 }
 
 pub async fn print_secret_from_vault(az: &AzureVault, secret_name: &str) {
