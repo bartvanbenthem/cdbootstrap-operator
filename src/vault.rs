@@ -145,7 +145,6 @@ pub async fn get_secret_value(
                 if let Some(value) = data.get(key) {
                     let token_decoded = from_utf8(&value.0)?;
                     client_secret = token_decoded.to_string();
-                    println!("{:?}", token_decoded);
                 }
             }
         }
