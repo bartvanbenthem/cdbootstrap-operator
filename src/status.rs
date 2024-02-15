@@ -9,8 +9,8 @@ use crate::crd::{CDBootstrap, CDBootstrapStatus};
 
 pub async fn patch(
     client: Client,
-    name: &String,
-    namespace: &String,
+    name: &str,
+    namespace: &str,
     success: bool,
 ) -> Result<CDBootstrap, Error> {
     let api: Api<CDBootstrap> = Api::namespaced(client, namespace);
@@ -23,7 +23,7 @@ pub async fn patch(
         .await
 }
 
-pub async fn print(client: Client, name: &String, namespace: &String) -> Result<(), Error> {
+pub async fn print(client: Client, name: &str, namespace: &str) -> Result<(), Error> {
     let api: Api<CDBootstrap> = Api::namespaced(client, namespace);
 
     let cdb = api.get_status(name).await?;
@@ -47,8 +47,8 @@ pub async fn print(client: Client, name: &String, namespace: &String) -> Result<
 #[allow(dead_code)]
 pub async fn replace(
     client: Client,
-    name: &String,
-    namespace: &String,
+    name: &str,
+    namespace: &str,
     success: bool,
 ) -> Result<CDBootstrap, Error> {
     let api: Api<CDBootstrap> = Api::namespaced(client, namespace);
