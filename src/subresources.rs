@@ -8,6 +8,7 @@ use kube::api::{DeleteParams, ObjectMeta, PostParams};
 use kube::{Api, Client, Error, ResourceExt};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
+use std::str::{from_utf8, Utf8Error};
 use tracing::*;
 
 use crate::crd::CDBootstrap;
@@ -378,6 +379,69 @@ impl AgentSecret {
     pub async fn delete(client: Client, name: &str, namespace: &str) -> Result<(), Error> {
         let api: Api<Secret> = Api::namespaced(client, namespace);
         api.delete(&name, &DeleteParams::default()).await?;
+        Ok(())
+    }
+
+    pub async fn value_is_set(
+        client: Client,
+        name: &str,
+        namespace: &str,
+        key: &str,
+    ) -> Result<bool, Utf8Error> {
+        let mut is_set = false;
+        let api: Api<Secret> = Api::namespaced(client.clone(), namespace);
+
+        match api.get(name).await {
+            Ok(secret) => {
+                if let Some(data) = secret.data {
+                    if let Some(value) = data.get(key) {
+                        let token_decoded = from_utf8(&value.0)?;
+                        is_set = !token_decoded.is_empty();
+                    }
+                }
+            }
+            Err(_) => {
+                error!("Secret {} in namespace {} NOT found", name, namespace);
+            }
+        }
+
+        Ok(is_set)
+    }
+
+    pub async fn get_value(
+        client: Client,
+        name: &str,
+        namespace: &str,
+        key: &str,
+    ) -> Result<String, Utf8Error> {
+        let mut client_secret = String::from("");
+
+        let api: Api<Secret> = Api::namespaced(client.clone(), namespace);
+
+        match api.get(name).await {
+            Ok(secret) => {
+                if let Some(data) = secret.data {
+                    if let Some(value) = data.get(key) {
+                        let token_decoded = from_utf8(&value.0)?;
+                        client_secret = token_decoded.to_string();
+                    }
+                }
+            }
+            Err(_) => {
+                error!("Error getting Secret {} in namespace {}", name, namespace);
+            }
+        }
+
+        Ok(client_secret)
+    }
+
+    #[allow(dead_code, unused_variables)]
+    pub async fn set_value(
+        client: Client,
+        name: &str,
+        namespace: &str,
+        key: &str,
+    ) -> Result<(), Utf8Error> {
         Ok(())
     }
 }

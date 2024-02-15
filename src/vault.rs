@@ -2,13 +2,12 @@ use azure_core::new_http_client;
 use azure_identity::{ClientSecretCredential, TokenCredentialOptions};
 use azure_security_keyvault::prelude::*;
 use futures::StreamExt;
-use k8s_openapi::api::core::v1::Secret;
-use kube::{Api, Client};
-use std::str::{from_utf8, Utf8Error};
+use kube::Client;
 use std::{env, process, sync::Arc};
 use tracing::{error, info};
 
 use crate::crd::CDBootstrap;
+use crate::subresources::AgentSecret;
 
 #[derive(Debug)]
 pub struct AzureVault {
@@ -17,7 +16,6 @@ pub struct AzureVault {
     pub spn: String,
 }
 
-#[allow(dead_code)]
 impl AzureVault {
     pub fn new(tenant: &str, keyvault_url: &str, spn: &str) -> Self {
         Self {
@@ -57,7 +55,8 @@ impl AzureVault {
 }
 
 pub async fn run(client: Client, name: &str, namespace: &str, cr: &CDBootstrap) {
-    let sps_result = secret_value_is_set(client.clone(), &name, &namespace, "SPN_SECRET").await;
+    let sps_result =
+        AgentSecret::value_is_set(client.clone(), &name, &namespace, "SPN_SECRET").await;
     let sps = match sps_result {
         Ok(sps) => sps,
         Err(err) => {
@@ -66,7 +65,8 @@ pub async fn run(client: Client, name: &str, namespace: &str, cr: &CDBootstrap) 
         }
     };
 
-    let azp_result = secret_value_is_set(client.clone(), &name, &namespace, "AZP_TOKEN").await;
+    let azp_result =
+        AgentSecret::value_is_set(client.clone(), &name, &namespace, "AZP_TOKEN").await;
     let azp = match azp_result {
         Ok(azp) => azp,
         Err(err) => {
@@ -84,7 +84,7 @@ pub async fn run(client: Client, name: &str, namespace: &str, cr: &CDBootstrap) 
         info!("SPN_SECRET value in Namespace {} Has been set", namespace);
         info!("Testing authentication to the Vault");
         if let Ok(secret_value) =
-            get_secret_value(client.clone(), &name, &namespace, "SPN_SECRET").await
+            AgentSecret::get_value(client.clone(), &name, &namespace, "SPN_SECRET").await
         {
             let azure_vault = AzureVault::new(&cr.spec.tenant, &cr.spec.keyvault, &cr.spec.spn);
             AzureVault::test_connection(&azure_vault, &secret_value.to_string()).await;
@@ -101,59 +101,6 @@ pub async fn run(client: Client, name: &str, namespace: &str, cr: &CDBootstrap) 
         info!("AZP_TOKEN value in Namespace {} has been SET", namespace);
         info!("Check the Pod logs to see if the Agent is polling")
     }
-}
-
-async fn secret_value_is_set(
-    client: Client,
-    name: &str,
-    namespace: &str,
-    key: &str,
-) -> Result<bool, Utf8Error> {
-    let mut is_set = false;
-    let api: Api<Secret> = Api::namespaced(client.clone(), namespace);
-
-    match api.get(name).await {
-        Ok(secret) => {
-            if let Some(data) = secret.data {
-                if let Some(value) = data.get(key) {
-                    let token_decoded = from_utf8(&value.0)?;
-                    is_set = !token_decoded.is_empty();
-                }
-            }
-        }
-        Err(_) => {
-            error!("Secret {} in namespace {} NOT found", name, namespace);
-        }
-    }
-
-    Ok(is_set)
-}
-
-pub async fn get_secret_value(
-    client: Client,
-    name: &str,
-    namespace: &str,
-    key: &str,
-) -> Result<String, Utf8Error> {
-    let mut client_secret = String::from("");
-
-    let api: Api<Secret> = Api::namespaced(client.clone(), namespace);
-
-    match api.get(name).await {
-        Ok(secret) => {
-            if let Some(data) = secret.data {
-                if let Some(value) = data.get(key) {
-                    let token_decoded = from_utf8(&value.0)?;
-                    client_secret = token_decoded.to_string();
-                }
-            }
-        }
-        Err(_) => {
-            error!("Error getting Secret {} in namespace {}", name, namespace);
-        }
-    }
-
-    Ok(client_secret)
 }
 
 pub async fn print_secret_from_vault(az: &AzureVault, secret_name: &str) {
