@@ -28,14 +28,12 @@ impl AzureVault {
     }
 
     // test the connection en authentication to the azure keyvault
-    pub async fn test_connection(az: &AzureVault) {
-        let spn_secret: String = env::var("SPN_SECRET").unwrap_or("none".to_string());
-
+    pub async fn test_connection(az: &AzureVault, client_secret: &String) {
         let creds = Arc::new(ClientSecretCredential::new(
             new_http_client(),
             az.tenant.clone(),
             az.spn.clone(),
-            spn_secret,
+            client_secret.clone(),
             TokenCredentialOptions::default(),
         ));
 
@@ -51,9 +49,9 @@ impl AzureVault {
         let secret_result = client.clone().list_secrets().into_stream().next().await;
 
         match secret_result.map(|result| result.map(|_| ())) {
-            Some(Ok(())) => info!("Connection to Azure KeyVault is Successful"),
+            Some(Ok(_)) => info!("Connection to Azure KeyVault is Successfull"),
             Some(Err(error)) => eprintln!("Error connecting to Azure KeyVault: {}", error),
-            None => eprintln!("Unexpected None value in secret_result"),
+            None => eprintln!("Error connecting to Azure KeyVault, returned None"),
         }
     }
 }
@@ -85,9 +83,18 @@ pub async fn run(client: Client, name: &str, namespace: &str, cr: &CDBootstrap) 
     if sps == true && azp == false {
         info!("SPN_SECRET value in Namespace {} Has been set", namespace);
         info!("Testing authentication to the Vault");
-
-        let azure_vault = AzureVault::new(&cr.spec.tenant, &cr.spec.keyvault, &cr.spec.spn);
-        AzureVault::test_connection(&azure_vault).await;
+        if let Ok(secret_value) =
+            get_secret_value(client.clone(), &name, &namespace, "SPN_SECRET").await
+        {
+            let azure_vault = AzureVault::new(&cr.spec.tenant, &cr.spec.keyvault, &cr.spec.spn);
+            AzureVault::test_connection(&azure_vault, &secret_value.to_string()).await;
+        } else {
+            // Handle the error
+            error!(
+                "Error retrieving SPN_SECRET value in Namespace {}",
+                namespace
+            );
+        }
     }
 
     if azp == true {
@@ -120,6 +127,34 @@ async fn secret_value_is_set(
     }
 
     Ok(is_set)
+}
+
+pub async fn get_secret_value(
+    client: Client,
+    name: &str,
+    namespace: &str,
+    key: &str,
+) -> Result<String, Utf8Error> {
+    let mut client_secret = String::from("");
+
+    let api: Api<Secret> = Api::namespaced(client.clone(), namespace);
+
+    match api.get(name).await {
+        Ok(secret) => {
+            if let Some(data) = secret.data {
+                if let Some(value) = data.get(key) {
+                    let token_decoded = from_utf8(&value.0)?;
+                    client_secret = token_decoded.to_string();
+                    println!("{:?}", token_decoded);
+                }
+            }
+        }
+        Err(_) => {
+            error!("Error getting Secret {} in namespace {}", name, namespace);
+        }
+    }
+
+    Ok(client_secret)
 }
 
 pub async fn print_secret_from_vault(az: &AzureVault, secret_name: &str) {
