@@ -120,6 +120,7 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
             AgentPolicy::apply(client.clone(), &name, &namespace, &cr).await?;
             Agent::apply(client.clone(), &name, &namespace, &cr).await?;
             status::patch(client, &name, &namespace, true).await?;
+            info!("Created {} subresources in namespace {}", &name, &namespace);
             Ok(Action::requeue(Duration::from_secs(20)))
         }
         CDBootstrapAction::Update => {
