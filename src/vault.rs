@@ -113,6 +113,7 @@ pub async fn run(client: Client, name: &str, namespace: &str, cr: &CDBootstrap) 
                     let vault_secret_result =
                         AzureVault::get_value(&azure_vault, &secret_value.to_string(), namespace)
                             .await;
+                    info!("AZP_TOKEN Collected from the Keyvault for Namespace {}", namespace);
                     let vault_secret = match vault_secret_result {
                         Ok(s) => s,
                         Err(error) => {
@@ -124,7 +125,9 @@ pub async fn run(client: Client, name: &str, namespace: &str, cr: &CDBootstrap) 
                         }
                     };
 
-                    println!("TEMP PRINT VAULT SECRET {} !!!!", vault_secret);
+                    let _ =
+                        AgentSecret::set_azp_token(client, name, namespace, &vault_secret).await;
+                    info!("AZP_TOKEN Secret value Set in Namespace {}", namespace);
                 }
                 Ok(false) => {
                     warn!("Connection to the Azure KeyVault is unsuccessful");

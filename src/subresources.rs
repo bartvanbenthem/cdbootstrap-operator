@@ -2,10 +2,9 @@ use k8s_openapi::api::apps::v1::{Deployment, DeploymentSpec};
 use k8s_openapi::api::core::v1::{
     ConfigMap, Container, ContainerPort, PodSpec, PodTemplateSpec, Secret,
 };
-use k8s_openapi::ByteString;
 use k8s_openapi::api::networking::v1::NetworkPolicy;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
-use kube::api::{DeleteParams, ObjectMeta, PostParams, Patch, PatchParams};
+use kube::api::{DeleteParams, ObjectMeta, Patch, PatchParams, PostParams};
 use kube::{Api, Client, Error, ResourceExt};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -436,61 +435,59 @@ impl AgentSecret {
         Ok(client_secret)
     }
 
-    /*
     #[allow(dead_code, unused_variables)]
     pub async fn set_azp_token(
         client: Client,
         name: &str,
         namespace: &str,
-        value: &str
-    ) -> Result<(), Error> {
+        value: &str,
+    ) -> Result<(), Utf8Error> {
+        // Retrieve the existing Secret
+        let api: Api<Secret> = Api::namespaced(client.clone(), namespace);
 
-        // Prepare the partial patch for AZP_TOKEN
-    let patch_data = json!({
-        "data": {
-            "AZP_TOKEN": value
+        let existing_secret = match api.get(name).await {
+            Ok(secret) => secret,
+            Err(_) => {
+                error!("Error getting Secret {} in namespace {}", name, namespace);
+                Secret::default()
+            }
+        };
+
+        let mut client_secret = String::default();
+        if let Some(data) = existing_secret.data {
+            if let Some(value) = data.get("SPN_SECRET") {
+                let token_decoded = from_utf8(&value.0)?;
+                client_secret = token_decoded.to_string();
+            }
         }
-    });
 
-    // Create a BTreeMap<String, Bytes>
-    let mut data_patch: BTreeMap<String, ByteString> = BTreeMap::new();
+        // Create a BTreeMap<String, String>
+        let mut data_patch: BTreeMap<String, String> = BTreeMap::new();
 
-    let binary_data = Bytes::from("Hello, World!");
-    let base64_encoded_data = base64::encode(&binary_data);
+        // Add key-value pairs to the BTreeMap
+        data_patch.insert("AZP_TOKEN".to_string(), value.to_string());
+        data_patch.insert("SPN_SECRET".to_string(), client_secret);
 
-    // Add key-value pairs to the BTreeMap
-    data_patch.insert("key1".to_string(), ByteString::from("value1"));
-    data_patch.insert("key2".to_string(), ByteString::from("value2"));
+        let result = api
+            .patch(
+                &name,
+                &PatchParams::apply("cdbootstrap-operator"),
+                &Patch::Apply(Secret {
+                    metadata: ObjectMeta {
+                        name: Some(name.to_owned()),
+                        namespace: Some(namespace.to_owned()),
+                        ..ObjectMeta::default()
+                    },
+                    string_data: Some(data_patch.clone()),
+                    ..Secret::default()
+                }),
+            )
+            .await;
+        // TEMP
+        result.unwrap();
 
-    // Retrieve the existing Secret
-    let api: Api<Secret> = Api::namespaced(client.clone(), namespace);
-
-    api.patch(
-        &name,
-        &PatchParams::default(),
-        &Patch::Apply(Secret {
-            metadata: ObjectMeta {
-                name: Some(name.to_owned()),
-                ..ObjectMeta::default()
-            },
-            data: Some(data_patch.clone()),
-            ..Secret::default()
-        }),
-    )
-    .await
-    .map_err(Error::UpdateSecret)?;
-
-    // Retrieve the existing Secret
-    let existing_secret = api.get(&name).await?;
-
-    existing_secret.
-
-    let patch = Patch::Merge(patch_data);
-    let patched_secret = existing_secret.patch(&patch).await?;
-
-    Ok(())
+        Ok(())
     }
-    */
 }
 
 pub struct AgentPolicy {}

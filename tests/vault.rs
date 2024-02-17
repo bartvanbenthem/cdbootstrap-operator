@@ -38,7 +38,7 @@ pub async fn print_secret_from_vault(az: &AzureVault, secret_name: &str) {
             Ok(s) => s.value,
             Err(error) => {
                 eprintln!("Error getting Azure Secrets from Client {}", error);
-                process::exit(1);
+                String::default()
             }
         };
 
