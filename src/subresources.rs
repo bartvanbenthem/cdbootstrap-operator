@@ -2,9 +2,10 @@ use k8s_openapi::api::apps::v1::{Deployment, DeploymentSpec};
 use k8s_openapi::api::core::v1::{
     ConfigMap, Container, ContainerPort, PodSpec, PodTemplateSpec, Secret,
 };
+use k8s_openapi::ByteString;
 use k8s_openapi::api::networking::v1::NetworkPolicy;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
-use kube::api::{DeleteParams, ObjectMeta, PostParams};
+use kube::api::{DeleteParams, ObjectMeta, PostParams, Patch, PatchParams};
 use kube::{Api, Client, Error, ResourceExt};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -435,15 +436,61 @@ impl AgentSecret {
         Ok(client_secret)
     }
 
+    /*
     #[allow(dead_code, unused_variables)]
-    pub async fn set_value(
+    pub async fn set_azp_token(
         client: Client,
         name: &str,
         namespace: &str,
-        key: &str,
-    ) -> Result<(), Utf8Error> {
-        Ok(())
+        value: &str
+    ) -> Result<(), Error> {
+
+        // Prepare the partial patch for AZP_TOKEN
+    let patch_data = json!({
+        "data": {
+            "AZP_TOKEN": value
+        }
+    });
+
+    // Create a BTreeMap<String, Bytes>
+    let mut data_patch: BTreeMap<String, ByteString> = BTreeMap::new();
+
+    let binary_data = Bytes::from("Hello, World!");
+    let base64_encoded_data = base64::encode(&binary_data);
+
+    // Add key-value pairs to the BTreeMap
+    data_patch.insert("key1".to_string(), ByteString::from("value1"));
+    data_patch.insert("key2".to_string(), ByteString::from("value2"));
+
+    // Retrieve the existing Secret
+    let api: Api<Secret> = Api::namespaced(client.clone(), namespace);
+
+    api.patch(
+        &name,
+        &PatchParams::default(),
+        &Patch::Apply(Secret {
+            metadata: ObjectMeta {
+                name: Some(name.to_owned()),
+                ..ObjectMeta::default()
+            },
+            data: Some(data_patch.clone()),
+            ..Secret::default()
+        }),
+    )
+    .await
+    .map_err(Error::UpdateSecret)?;
+
+    // Retrieve the existing Secret
+    let existing_secret = api.get(&name).await?;
+
+    existing_secret.
+
+    let patch = Patch::Merge(patch_data);
+    let patched_secret = existing_secret.patch(&patch).await?;
+
+    Ok(())
     }
+    */
 }
 
 pub struct AgentPolicy {}
