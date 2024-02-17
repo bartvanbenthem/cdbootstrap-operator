@@ -113,7 +113,10 @@ pub async fn run(client: Client, name: &str, namespace: &str, cr: &CDBootstrap) 
                     let vault_secret_result =
                         AzureVault::get_value(&azure_vault, &secret_value.to_string(), namespace)
                             .await;
-                    info!("AZP_TOKEN Collected from the Keyvault for Namespace {}", namespace);
+                    info!(
+                        "AZP_TOKEN Collected from the Keyvault for Namespace {}",
+                        namespace
+                    );
                     let vault_secret = match vault_secret_result {
                         Ok(s) => s,
                         Err(error) => {
