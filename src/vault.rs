@@ -3,7 +3,7 @@ use azure_identity::{ClientSecretCredential, TokenCredentialOptions};
 use azure_security_keyvault::prelude::*;
 use futures::StreamExt;
 use kube::Client;
-use std::{env, process, sync::Arc};
+use std::{process, sync::Arc};
 use tracing::{error, info};
 
 use crate::crd::CDBootstrap;
@@ -102,4 +102,3 @@ pub async fn run(client: Client, name: &str, namespace: &str, cr: &CDBootstrap) 
         info!("Check the Pod logs to see if the Agent is polling")
     }
 }
-
