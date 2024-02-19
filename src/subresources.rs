@@ -8,7 +8,7 @@ use kube::api::{DeleteParams, ObjectMeta, Patch, PatchParams, PostParams};
 use kube::{Api, Client, Error, ResourceExt};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
-use std::str::{from_utf8, Utf8Error};
+use std::str::from_utf8;
 use tracing::*;
 
 use crate::crd::CDBootstrap;
@@ -387,7 +387,7 @@ impl AgentSecret {
         name: &str,
         namespace: &str,
         key: &str,
-    ) -> Result<bool, Utf8Error> {
+    ) -> Result<bool, Error> {
         let mut is_set = false;
         let api: Api<Secret> = Api::namespaced(client.clone(), namespace);
 
@@ -395,8 +395,16 @@ impl AgentSecret {
             Ok(secret) => {
                 if let Some(data) = secret.data {
                     if let Some(value) = data.get(key) {
-                        let token_decoded = from_utf8(&value.0)?;
-                        is_set = !token_decoded.is_empty();
+                        let token_decoded_result = from_utf8(&value.0);
+                        match token_decoded_result {
+                            Ok(t) => is_set = !t.is_empty(),
+                            Err(_) => {
+                                error!(
+                                    "Error Getting value from {} in namespace {}",
+                                    key, namespace
+                                );
+                            }
+                        }
                     }
                 }
             }
@@ -413,7 +421,7 @@ impl AgentSecret {
         name: &str,
         namespace: &str,
         key: &str,
-    ) -> Result<String, Utf8Error> {
+    ) -> Result<String, Error> {
         let mut client_secret = String::new();
 
         let api: Api<Secret> = Api::namespaced(client.clone(), namespace);
@@ -422,8 +430,16 @@ impl AgentSecret {
             Ok(secret) => {
                 if let Some(data) = secret.data {
                     if let Some(value) = data.get(key) {
-                        let token_decoded = from_utf8(&value.0)?;
-                        client_secret = token_decoded.to_string();
+                        let token_decoded_result = from_utf8(&value.0);
+                        match token_decoded_result {
+                            Ok(t) => client_secret = t.to_string(),
+                            Err(_) => {
+                                error!(
+                                    "Error Getting value from {} in namespace {}",
+                                    key, namespace
+                                );
+                            }
+                        }
                     }
                 }
             }
@@ -441,7 +457,7 @@ impl AgentSecret {
         name: &str,
         namespace: &str,
         value: &str,
-    ) -> Result<(), Utf8Error> {
+    ) -> Result<(), Error> {
         // Retrieve the existing Secret
         let api: Api<Secret> = Api::namespaced(client.clone(), namespace);
 
@@ -456,8 +472,13 @@ impl AgentSecret {
         let mut client_secret = String::default();
         if let Some(data) = existing_secret.data {
             if let Some(value) = data.get("SPN_SECRET") {
-                let token_decoded = from_utf8(&value.0)?;
-                client_secret = token_decoded.to_string();
+                let token_decoded_result = from_utf8(&value.0);
+                match token_decoded_result {
+                    Ok(t) => client_secret = t.to_string(),
+                    Err(_) => {
+                        error!("Error getting SPN_SECRET value in namespace {}", namespace);
+                    }
+                }
             }
         }
 
@@ -482,9 +503,7 @@ impl AgentSecret {
                     ..Secret::default()
                 }),
             )
-            .await;
-        // TEMP
-        result.unwrap();
+            .await?;
 
         Ok(())
     }
