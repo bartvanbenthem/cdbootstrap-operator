@@ -42,7 +42,7 @@ pub async fn print_secret_from_vault(az: &AzureVault, secret_name: &str) {
             }
         };
 
-        println!("\nvalue from keyvault: {}\n", value);
+        println!("\nvalue from keyvault: {}...\n", &value[0..5]);
     }
 }
 
