@@ -414,7 +414,7 @@ impl AgentSecret {
         namespace: &str,
         key: &str,
     ) -> Result<String, Utf8Error> {
-        let mut client_secret = String::from("");
+        let mut client_secret = String::new();
 
         let api: Api<Secret> = Api::namespaced(client.clone(), namespace);
 

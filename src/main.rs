@@ -121,7 +121,7 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
             Agent::apply(client.clone(), &name, &namespace, &cr).await?;
             status::patch(client, &name, &namespace, true).await?;
             info!("Created {} subresources in namespace {}", &name, &namespace);
-            Ok(Action::requeue(Duration::from_secs(20)))
+            Ok(Action::requeue(Duration::from_secs(10)))
         }
         CDBootstrapAction::Update => {
             info!(
@@ -136,7 +136,7 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
                 "Updated {} subresources in namespace {} to desired state",
                 &name, &namespace
             );
-            Ok(Action::requeue(Duration::from_secs(20)))
+            Ok(Action::requeue(Duration::from_secs(10)))
         }
         CDBootstrapAction::Delete => {
             // Deletes any subresources related to this `CDBootstrap` resources. If and only if all subresources

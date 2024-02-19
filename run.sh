@@ -9,7 +9,6 @@ cargo fmt
 
 cargo run
 
-# kubectl apply -f config/samples/cdbootstrap-example.yaml
-# kubectl apply -f config/samples/update.yaml
+# kubectl apply -f config/samples/cdbootstrap-example.yaml && ./inject_secrets.sh
 
-# ./inject_secrets.sh
+# kubectl apply -f config/samples/update.yaml
