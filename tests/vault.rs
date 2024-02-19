@@ -5,8 +5,9 @@ use cdbootstrap::vault::*;
 use std::sync::Arc;
 use std::{env, process};
 
-pub async fn print_secret_from_vault(az: &AzureVault, secret_name: &str) {
+pub async fn print_secret_from_vault(az: &AzureVault, namespace: &str) {
     let config = AzureVault {
+        oid: az.oid.clone(),
         tenant: az.tenant.clone(),
         url: az.url.clone(),
         spn: az.spn.clone(),
@@ -31,8 +32,11 @@ pub async fn print_secret_from_vault(az: &AzureVault, secret_name: &str) {
         }
     };
 
-    if secret_name.len() > 0 {
-        let secret_result = client.clone().get(secret_name).await;
+    if namespace.len() > 0 {
+        let secret_result = client
+            .clone()
+            .get(format!("{}-{}", az.oid, namespace))
+            .await;
 
         let value = match secret_result {
             Ok(s) => s.value,
@@ -48,11 +52,12 @@ pub async fn print_secret_from_vault(az: &AzureVault, secret_name: &str) {
 
 #[tokio::test]
 async fn print_secret_works() {
+    let oid = env::var("OID").unwrap_or("none".to_string());
     let tenant = env::var("TENANT").unwrap_or("none".to_string());
     let keyvault_url = env::var("KEYVAULT_URL").unwrap_or("none".to_string());
     let spn = env::var("SPN").unwrap_or("none".to_string());
-    let secret_name = env::var("SECRET_NAME").unwrap_or("none".to_string());
+    let namespace = env::var("NAMESPACE").unwrap_or("none".to_string());
 
-    let azure = AzureVault::new(&tenant, &keyvault_url, &spn);
-    print_secret_from_vault(&azure, &secret_name).await;
+    let azure = AzureVault::new(&oid, &tenant, &keyvault_url, &spn);
+    print_secret_from_vault(&azure, &namespace).await;
 }

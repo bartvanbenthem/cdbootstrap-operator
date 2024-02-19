@@ -5,9 +5,10 @@ metadata:
   name: test-bootstrap # Name of the "bootstrap" custom resource instance, may be changed to your liking
   #namespace: default # Namespace must exist and account in KUBECONFIG must have sufficient permissions
 spec:
+  oid: mycluster # Object Identifier
   url: https://dev.azure.com/DevOps-SST
-  pool: poc-pool
+  pool: poc-pool # name of the Azure Pipelines agent pool
   replicas: 2 # Number of "bootstrap" pods created.
   keyvault: https://kmcs-p-weu-prd.vault.azure.net/
-  spn: '69f74670-5cf9-4cfe-b795-8dc3a6cc975f'
+  spn: '69f74670-5cf9-4cfe-b795-8dc3a6cc975f' # Azure Client_ID
   tenant: '0baeb517-c6ec-4d6c-a394-96a5affa5ada'

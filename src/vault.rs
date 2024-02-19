@@ -12,14 +12,16 @@ use crate::subresources::AgentSecret;
 
 #[derive(Debug)]
 pub struct AzureVault {
+    pub oid: String,
     pub tenant: String,
     pub url: String,
     pub spn: String,
 }
 
 impl AzureVault {
-    pub fn new(tenant: &str, keyvault_url: &str, spn: &str) -> Self {
+    pub fn new(oid: &str, tenant: &str, keyvault_url: &str, spn: &str) -> Self {
         Self {
+            oid: oid.to_string(),
             tenant: tenant.to_string(),
             url: keyvault_url.to_string(),
             spn: spn.to_string(),
@@ -69,7 +71,10 @@ impl AzureVault {
         namespace: &str,
     ) -> Result<String, Error> {
         let client = AzureVault::new_client(az, client_secret).await?;
-        let secret_response = client.clone().get(namespace).await?;
+        let secret_response = client
+            .clone()
+            .get(format!("{}-{}", az.oid, namespace))
+            .await?;
         Ok(secret_response.value)
     }
 }
@@ -104,7 +109,12 @@ pub async fn run(client: Client, name: &str, namespace: &str, cr: &CDBootstrap) 
             AgentSecret::get_value(client.clone(), name, namespace, "SPN_SECRET").await
         {
             info!("Testing authentication to the Vault");
-            let azure_vault = AzureVault::new(&cr.spec.tenant, &cr.spec.keyvault, &cr.spec.spn);
+            let azure_vault = AzureVault::new(
+                &cr.spec.oid,
+                &cr.spec.tenant,
+                &cr.spec.keyvault,
+                &cr.spec.spn,
+            );
             let connection_result =
                 AzureVault::test_connection(&azure_vault, &secret_value.to_string()).await;
             match connection_result {

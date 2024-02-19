@@ -33,6 +33,9 @@ spec:
             spec:
               type: object
               properties:
+                oid:
+                  type: string
+                  format: string
                 replicas:
                   type: integer
                   format: int32

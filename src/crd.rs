@@ -17,6 +17,8 @@ use serde::{Deserialize, Serialize};
 #[kube(status = "CDBootstrapStatus")]
 pub struct CDBootstrapSpec {
     #[garde(skip)]
+    pub oid: String,
+    #[garde(skip)]
     pub replicas: i32,
     #[garde(skip)]
     pub url: String,
