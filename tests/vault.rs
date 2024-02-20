@@ -32,11 +32,9 @@ pub async fn print_secret_from_vault(az: &AzureVault, namespace: &str) {
         }
     };
 
+    let key = format!("{}-{}", az.oid, namespace);
     if namespace.len() > 0 {
-        let secret_result = client
-            .clone()
-            .get(format!("{}-{}", az.oid, namespace))
-            .await;
+        let secret_result = client.clone().get(&key).await;
 
         let value = match secret_result {
             Ok(s) => s.value,
@@ -46,7 +44,11 @@ pub async fn print_secret_from_vault(az: &AzureVault, namespace: &str) {
             }
         };
 
-        println!("\nvalue from keyvault: {}...\n", &value[0..5]);
+        println!(
+            "\nvalue from KeyVault key={} value={}...\n",
+            &key,
+            &value[0..5]
+        );
     }
 }
 
