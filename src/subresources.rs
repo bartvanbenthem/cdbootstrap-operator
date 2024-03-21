@@ -195,7 +195,10 @@ impl Agent {
             Ok(existing_deployment) => existing_deployment,
             Err(_) => {
                 // Handle the case when the deployment is not found
-                info!("Not able to find the existing {} deployment", name);
+                info!(
+                    "Not able to find the existing {} deployment in {}",
+                    name, namespace
+                );
                 return Ok(false);
             }
         };

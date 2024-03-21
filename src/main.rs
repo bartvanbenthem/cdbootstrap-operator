@@ -97,7 +97,7 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
 
     let name = cr.name_any(); // Name of the CDBootstrap resource is used to name the subresources as well.
 
-    let in_desired_state = Agent::desired_state(client.clone(), &cr, &name, &namespace).await?;
+    let in_desired_state = in_desired_state(client.clone(), &cr, &name, &namespace).await;
 
     // Performs action as decided by the `determine_action` function.
     return match determine_action(&cr, in_desired_state) {
@@ -124,7 +124,7 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
             Ok(Action::requeue(Duration::from_secs(10)))
         }
         CDBootstrapAction::Update => {
-            info!(
+            warn!(
                 "{} subresources in namespace {} are not in desired state",
                 &name, &namespace
             );
@@ -166,6 +166,13 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
             Ok(Action::requeue(Duration::from_secs(60)))
         }
     };
+}
+
+// check if all objects are in a desired state
+// !!!!! for now only the agent replica number is checked !!!!!!!!
+async fn in_desired_state(client: Client, cr: &CDBootstrap, name: &str, namespace: &str) -> bool {
+    let agent = Agent::desired_state(client.clone(), &cr, &name, &namespace).await;
+    agent.unwrap_or(false)
 }
 
 /// Resources arrives into reconciliation queue in a certain state. This function looks at
