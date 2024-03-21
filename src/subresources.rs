@@ -5,7 +5,7 @@ use k8s_openapi::api::core::v1::{
 use k8s_openapi::api::networking::v1::NetworkPolicy;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
 use kube::api::{DeleteParams, ObjectMeta, Patch, PatchParams, PostParams};
-use kube::{Api, Client, Error, ResourceExt};
+use kube::{Api, Client, Error, Resource, ResourceExt};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::str::from_utf8;
@@ -68,7 +68,16 @@ impl Agent {
             "metadata": {
                 "name": name,
                 "namespace": namespace,
-                "labels": labels
+                "labels": labels,
+                "ownerReferences": [
+                    {
+                      "apiVersion": CDBootstrap::api_version(&()),
+                      "kind": CDBootstrap::kind(&()),
+                      "name": cr.name_any(),
+                      "uid": cr.uid(),
+                      "controller": true,
+                    }
+                ]
             },
             "spec": {
                 "replicas": cr.spec.replicas,
@@ -252,6 +261,15 @@ impl AgentConfig {
                 "name": name,
                 "namespace": namespace,
                 "labels": labels,
+                "ownerReferences": [
+                    {
+                      "apiVersion": CDBootstrap::api_version(&()),
+                      "kind": CDBootstrap::kind(&()),
+                      "name": cr.name_any(),
+                      "uid": cr.uid(),
+                      "controller": true,
+                    }
+                ]
                },
                 "data": {
                   "AZP_POOL": pool,
@@ -344,6 +362,15 @@ impl AgentSecret {
                 "name": name,
                 "namespace": namespace,
                 "labels": labels,
+                "ownerReferences": [
+                    {
+                      "apiVersion": CDBootstrap::api_version(&()),
+                      "kind": CDBootstrap::kind(&()),
+                      "name": cr.name_any(),
+                      "uid": cr.uid(),
+                      "controller": true,
+                    }
+                ]
                },
                 "data": {
                   "AZP_TOKEN": null,
@@ -562,7 +589,16 @@ impl AgentPolicy {
             "metadata": {
                 "name": name,
                 "namespace": namespace,
-                "labels": labels
+                "labels": labels,
+                "ownerReferences": [
+                    {
+                      "apiVersion": CDBootstrap::api_version(&()),
+                      "kind": CDBootstrap::kind(&()),
+                      "name": cr.name_any(),
+                      "uid": cr.uid(),
+                      "controller": true,
+                    }
+                ]
             },
             "spec": {
                 "podSelector": {
