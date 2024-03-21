@@ -3,7 +3,7 @@ use k8s_openapi::api::core::v1::{
     ConfigMap, Container, ContainerPort, PodSpec, PodTemplateSpec, Secret,
 };
 use k8s_openapi::api::networking::v1::NetworkPolicy;
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::{LabelSelector, OwnerReference};
 use kube::api::{DeleteParams, ObjectMeta, Patch, PatchParams, PostParams};
 use kube::{Api, Client, Error, Resource, ResourceExt};
 use serde_json::{json, Value};
@@ -61,6 +61,10 @@ impl Agent {
 
         let image = String::from("ghcr.io/bartvanbenthem/azp-agent-alpine:latest");
 
+        let owner = cr
+            .controller_owner_ref(&())
+            .unwrap_or(OwnerReference::default());
+
         // Define the NetworkPolicy configuration as JSON
         let deployment_json: Value = json!({
             "apiVersion": "apps/v1",
@@ -71,10 +75,10 @@ impl Agent {
                 "labels": labels,
                 "ownerReferences": [
                     {
-                      "apiVersion": CDBootstrap::api_version(&()),
-                      "kind": CDBootstrap::kind(&()),
-                      "name": cr.name_any(),
-                      "uid": cr.uid(),
+                      "apiVersion": owner.api_version,
+                      "kind": owner.kind,
+                      "name": owner.name,
+                      "uid": owner.uid,
                       "controller": true,
                     }
                 ]
@@ -253,6 +257,10 @@ impl AgentConfig {
         let url = cr.spec.url.clone();
         let pool = cr.spec.pool.clone();
 
+        let owner = cr
+            .controller_owner_ref(&())
+            .unwrap_or(OwnerReference::default());
+
         // Define the NetworkPolicy configuration as JSON
         let configmap_json: Value = json!({
                "apiVersion": "v1",
@@ -263,12 +271,12 @@ impl AgentConfig {
                 "labels": labels,
                 "ownerReferences": [
                     {
-                      "apiVersion": CDBootstrap::api_version(&()),
-                      "kind": CDBootstrap::kind(&()),
-                      "name": cr.name_any(),
-                      "uid": cr.uid(),
-                      "controller": true,
-                    }
+                        "apiVersion": owner.api_version,
+                        "kind": owner.kind,
+                        "name": owner.name,
+                        "uid": owner.uid,
+                        "controller": true,
+                      }
                 ]
                },
                 "data": {
@@ -354,6 +362,10 @@ impl AgentSecret {
             .cloned()
             .collect();
 
+        let owner = cr
+            .controller_owner_ref(&())
+            .unwrap_or(OwnerReference::default());
+
         // Define the NetworkPolicy configuration as JSON
         let secret_json: Value = json!({
                "apiVersion": "v1",
@@ -364,12 +376,12 @@ impl AgentSecret {
                 "labels": labels,
                 "ownerReferences": [
                     {
-                      "apiVersion": CDBootstrap::api_version(&()),
-                      "kind": CDBootstrap::kind(&()),
-                      "name": cr.name_any(),
-                      "uid": cr.uid(),
-                      "controller": true,
-                    }
+                        "apiVersion": owner.api_version,
+                        "kind": owner.kind,
+                        "name": owner.name,
+                        "uid": owner.uid,
+                        "controller": true,
+                      }
                 ]
                },
                 "data": {
@@ -582,6 +594,10 @@ impl AgentPolicy {
             .cloned()
             .collect();
 
+        let owner = cr
+            .controller_owner_ref(&())
+            .unwrap_or(OwnerReference::default());
+
         // Define the NetworkPolicy configuration as JSON
         let network_policy_json: Value = json!({
             "apiVersion": "networking.k8s.io/v1",
@@ -592,12 +608,12 @@ impl AgentPolicy {
                 "labels": labels,
                 "ownerReferences": [
                     {
-                      "apiVersion": CDBootstrap::api_version(&()),
-                      "kind": CDBootstrap::kind(&()),
-                      "name": cr.name_any(),
-                      "uid": cr.uid(),
-                      "controller": true,
-                    }
+                        "apiVersion": owner.api_version,
+                        "kind": owner.kind,
+                        "name": owner.name,
+                        "uid": owner.uid,
+                        "controller": true,
+                      }
                 ]
             },
             "spec": {
