@@ -170,9 +170,17 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
 
 // check if all objects are in a desired state
 // !!!!! for now only the agent replica number is checked !!!!!!!!
+// !!!!! 2 times to check the iterator construct !!!!!!!!!!!!!!!!!
 async fn in_desired_state(client: Client, cr: &CDBootstrap, name: &str, namespace: &str) -> bool {
-    let agent = Agent::desired_state(client.clone(), &cr, &name, &namespace).await;
-    agent.unwrap_or(false)
+    let results = vec![
+        Agent::desired_state(client.clone(), &cr, &name, &namespace)
+            .await
+            .unwrap_or(false),
+        Agent::desired_state(client.clone(), &cr, &name, &namespace)
+            .await
+            .unwrap_or(false),
+    ];
+    results.iter().all(|&result| result)
 }
 
 /// Resources arrives into reconciliation queue in a certain state. This function looks at
