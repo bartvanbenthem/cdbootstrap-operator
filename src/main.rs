@@ -176,7 +176,7 @@ async fn in_desired_state(client: Client, cr: &CDBootstrap, name: &str, namespac
         Agent::desired_state(client.clone(), &cr, &name, &namespace)
             .await
             .unwrap_or(false),
-        Agent::desired_state(client.clone(), &cr, &name, &namespace)
+        Agent::desired_state(client.clone(), &cr, &name, &namespace) // example tot test iterator.all
             .await
             .unwrap_or(false),
     ];
