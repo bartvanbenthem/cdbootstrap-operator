@@ -5,6 +5,7 @@ use cdbootstrap::subresources::{Agent, AgentConfig, AgentPolicy, AgentSecret};
 use cdbootstrap::vault::*;
 
 use anyhow::Result;
+use futures::join;
 use futures::stream::StreamExt;
 use kube::runtime::watcher::Config;
 use kube::{client::Client, runtime::controller::Action, runtime::Controller, Api};
@@ -115,10 +116,35 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
                 &name, &namespace
             );
             // Invoke creation of a Kubernetes built-in resource named deployment with `n` CDBootstrap service pods.
-            AgentSecret::apply(client.clone(), &name, &namespace, &cr).await?;
-            AgentConfig::apply(client.clone(), &name, &namespace, &cr).await?;
-            AgentPolicy::apply(client.clone(), &name, &namespace, &cr).await?;
-            Agent::apply(client.clone(), &name, &namespace, &cr).await?;
+            let (secret_result, config_result, policy_result, agent_result) = join!(
+                AgentSecret::apply(client.clone(), &name, &namespace, &cr),
+                AgentConfig::apply(client.clone(), &name, &namespace, &cr),
+                AgentPolicy::apply(client.clone(), &name, &namespace, &cr),
+                Agent::apply(client.clone(), &name, &namespace, &cr)
+            );
+
+            // Handle the results of each apply operation
+            if let Err(e) = secret_result {
+                eprintln!("Error applying AgentSecret: {:?}", e);
+                status::patch(client.clone(), &name, &namespace, false).await?;
+                return Err(e.into());
+            }
+            if let Err(e) = config_result {
+                eprintln!("Error applying AgentConfig: {:?}", e);
+                status::patch(client.clone(), &name, &namespace, false).await?;
+                return Err(e.into());
+            }
+            if let Err(e) = policy_result {
+                eprintln!("Error applying AgentPolicy: {:?}", e);
+                status::patch(client.clone(), &name, &namespace, false).await?;
+                return Err(e.into());
+            }
+            if let Err(e) = agent_result {
+                eprintln!("Error applying Agent: {:?}", e);
+                status::patch(client.clone(), &name, &namespace, false).await?;
+                return Err(e.into());
+            }
+
             status::patch(client, &name, &namespace, true).await?;
             info!("Created {} subresources in namespace {}", &name, &namespace);
             Ok(Action::requeue(Duration::from_secs(10)))
@@ -128,9 +154,30 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
                 "{} subresources in namespace {} are not in desired state",
                 &name, &namespace
             );
-            AgentConfig::apply(client.clone(), &name, &namespace, &cr).await?;
-            AgentPolicy::apply(client.clone(), &name, &namespace, &cr).await?;
-            Agent::apply(client.clone(), &name, &namespace, &cr).await?;
+
+            let (config_result, policy_result, agent_result) = join!(
+                AgentConfig::apply(client.clone(), &name, &namespace, &cr),
+                AgentPolicy::apply(client.clone(), &name, &namespace, &cr),
+                Agent::apply(client.clone(), &name, &namespace, &cr)
+            );
+
+            // Handle the results of each apply operation
+            if let Err(e) = config_result {
+                eprintln!("Error applying AgentConfig: {:?}", e);
+                status::patch(client.clone(), &name, &namespace, false).await?;
+                return Err(e.into());
+            }
+            if let Err(e) = policy_result {
+                eprintln!("Error applying AgentPolicy: {:?}", e);
+                status::patch(client.clone(), &name, &namespace, false).await?;
+                return Err(e.into());
+            }
+            if let Err(e) = agent_result {
+                eprintln!("Error applying Agent: {:?}", e);
+                status::patch(client.clone(), &name, &namespace, false).await?;
+                return Err(e.into());
+            }
+
             status::patch(client.clone(), &name, &namespace, true).await?;
             info!(
                 "Updated {} subresources in namespace {} to desired state",
@@ -149,10 +196,35 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
             // automatically converted into `Error` defined in this crate and the reconciliation is ended
             // with that error.
             // Note: A more advanced implementation would check for the Deployment's existence.
-            AgentPolicy::delete(client.clone(), &name, &namespace).await?;
-            AgentConfig::delete(client.clone(), &name, &namespace).await?;
-            AgentSecret::delete(client.clone(), &name, &namespace).await?;
-            Agent::delete(client.clone(), &name, &namespace).await?;
+
+            let (policy_result, config_result, secret_result, deployment_result) = join!(
+                AgentPolicy::delete(client.clone(), &name, &namespace),
+                AgentConfig::delete(client.clone(), &name, &namespace),
+                AgentSecret::delete(client.clone(), &name, &namespace),
+                Agent::delete(client.clone(), &name, &namespace),
+            );
+
+            // Handle the results of each apply operation
+            if let Err(e) = policy_result {
+                eprintln!("Error deleting AgentPolicy: {:?}", e);
+                status::patch(client.clone(), &name, &namespace, false).await?;
+                return Err(e.into());
+            }
+            if let Err(e) = config_result {
+                eprintln!("Error deleting AgentConfig: {:?}", e);
+                status::patch(client.clone(), &name, &namespace, false).await?;
+                return Err(e.into());
+            }
+            if let Err(e) = secret_result {
+                eprintln!("Error deleting AgentSecret: {:?}", e);
+                status::patch(client.clone(), &name, &namespace, false).await?;
+                return Err(e.into());
+            }
+            if let Err(e) = deployment_result {
+                eprintln!("Error deleting Agent: {:?}", e);
+                status::patch(client.clone(), &name, &namespace, false).await?;
+                return Err(e.into());
+            }
             // Once the deployment is successfully removed, remove the finalizer to make it possible
             // for Kubernetes to delete the `CDBootstrap` resource.
             finalizer::delete(client, &name, &namespace).await?;
