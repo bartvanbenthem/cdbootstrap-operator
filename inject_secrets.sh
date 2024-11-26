@@ -1,6 +1,7 @@
 source ../00-ENV/env.sh
 
 export SPAT=$(echo $SPN_SECRET | base64)
+sleep 2
 kubectl patch secret test-bootstrap -p '{"data":{"SPN_SECRET": "'"$SPAT"'"}}'
 
 

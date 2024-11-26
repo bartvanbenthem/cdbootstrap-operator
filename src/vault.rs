@@ -65,16 +65,9 @@ impl AzureVault {
         Ok(true)
     }
 
-    pub async fn get_value(
-        az: &AzureVault,
-        client_secret: &String,
-        namespace: &str,
-    ) -> Result<String, Error> {
+    pub async fn get_value(az: &AzureVault, client_secret: &String) -> Result<String, Error> {
         let client = AzureVault::new_client(az, client_secret).await?;
-        let secret_response = client
-            .clone()
-            .get(format!("{}-{}", az.oid, namespace))
-            .await?;
+        let secret_response = client.clone().get(format!("{}", az.oid)).await?;
         Ok(secret_response.value)
     }
 }
@@ -121,8 +114,7 @@ pub async fn run(client: Client, name: &str, namespace: &str, cr: &CDBootstrap) 
                 Ok(true) => {
                     info!("Connection to the Azure KeyVault is successful");
                     let vault_secret_result =
-                        AzureVault::get_value(&azure_vault, &secret_value.to_string(), namespace)
-                            .await;
+                        AzureVault::get_value(&azure_vault, &secret_value.to_string()).await;
                     info!(
                         "AZP_TOKEN Collected from the Keyvault for Namespace {}",
                         namespace
