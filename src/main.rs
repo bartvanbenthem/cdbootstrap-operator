@@ -147,7 +147,7 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
 
             status::patch(client, &name, &namespace, true).await?;
             info!("Created {} subresources in namespace {}", &name, &namespace);
-            Ok(Action::requeue(Duration::from_secs(10)))
+            Ok(Action::requeue(Duration::from_secs(5)))
         }
         CDBootstrapAction::Update => {
             warn!(
@@ -155,13 +155,19 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
                 &name, &namespace
             );
 
-            let (config_result, policy_result, agent_result) = join!(
+            let (secret_result, config_result, policy_result, agent_result) = join!(
+                AgentSecret::apply(client.clone(), &name, &namespace, &cr),
                 AgentConfig::apply(client.clone(), &name, &namespace, &cr),
                 AgentPolicy::apply(client.clone(), &name, &namespace, &cr),
                 Agent::apply(client.clone(), &name, &namespace, &cr)
             );
 
             // Handle the results of each apply operation
+            if let Err(e) = secret_result {
+                eprintln!("Error applying AgentSecret: {:?}", e);
+                status::patch(client.clone(), &name, &namespace, false).await?;
+                return Err(e.into());
+            }
             if let Err(e) = config_result {
                 eprintln!("Error applying AgentConfig: {:?}", e);
                 status::patch(client.clone(), &name, &namespace, false).await?;
@@ -235,7 +241,7 @@ async fn reconcile(cr: Arc<CDBootstrap>, context: Arc<ContextData>) -> Result<Ac
             status::print(client.clone(), &name, &namespace).await?;
             //temp check azure vault functions
             run(client, &name, &namespace, &cr).await;
-            Ok(Action::requeue(Duration::from_secs(20)))
+            Ok(Action::requeue(Duration::from_secs(10)))
         }
     };
 }
