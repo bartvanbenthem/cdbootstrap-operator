@@ -1,4 +1,4 @@
-KUBECONFIG=~/.kube/k3s.yaml
+KUBECONFIG=~/.kube/config
 
 kubectl create -f config/crd/cdbootstraps.cndev.nl.yaml
 
